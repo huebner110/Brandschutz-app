@@ -2208,45 +2208,61 @@ function exportXLSX() {
   }
   var wb = XLSX.utils.book_new();
 
-  // Blatt 1: Anlagen
-  var anlagenRows = [['Standort','Typ','Bezeichnung','LetztePruefung','NaechstePruefung','IntervallMonate','Prueffirma','Bemerkung']];
+  // Dropdown-Werte als Strings
+  var ddStandort  = '"' + LOCATIONS.join(',') + '"';
+  var ddTyp       = '"' + ANLAGE_TYPEN.join(',') + '"';
+  var ddRolle     = '"' + KONTAKT_ROLLEN.join(',') + '"';
+  var ddStatus    = '"' + AUFGABEN_STATUS.join(',') + '"';
+  var ddIntervall = '"1,3,6,12,24,36,60"';
+
+  // Hilfsfunktion: Dropdown-Validierung für eine Spalte (Zeilen 2–500)
+  function dv(col, formula) {
+    return { sqref: col + '2:' + col + '500', type: 'list', formula1: formula, showErrorMessage: true, error: 'Bitte Wert aus der Liste wählen.', errorTitle: 'Ungültiger Wert' };
+  }
+
+  // ── Blatt 1: Anlagen ──
+  var anlagenRows = [['Standort','Typ','Bezeichnung','LetztePruefung (JJJJ-MM-TT)','NaechstePruefung','IntervallMonate','Prueffirma','Bemerkung']];
   for (var i = 0; i < S.anlagen.length; i++) {
     var a = S.anlagen[i];
     var naechste = (a.letztePruefung && a.intervallMonate) ? addMonths(a.letztePruefung, parseInt(a.intervallMonate)) : '';
     anlagenRows.push([a.standort,a.typ,a.bezeichnung,a.letztePruefung||'',naechste,a.intervallMonate||'',a.pruefFirma||'',a.bemerkung||'']);
   }
   var wsAnlagen = XLSX.utils.aoa_to_sheet(anlagenRows);
-  wsAnlagen['!cols'] = [{wch:16},{wch:18},{wch:24},{wch:14},{wch:14},{wch:8},{wch:20},{wch:28}];
+  wsAnlagen['!cols'] = [{wch:18},{wch:16},{wch:26},{wch:20},{wch:16},{wch:8},{wch:22},{wch:30}];
+  wsAnlagen['!dataValidations'] = [dv('A', ddStandort), dv('B', ddTyp), dv('F', ddIntervall)];
   XLSX.utils.book_append_sheet(wb, wsAnlagen, 'Anlagen');
 
-  // Blatt 2: Verträge
-  var vertraegeRows = [['Standort','Firma','Leistung','Vertragsnummer','NaechsterTermin','IntervallMonate','Ansprechpartner','Telefon','Email','Bemerkung']];
+  // ── Blatt 2: Verträge ──
+  var vertraegeRows = [['Standort','Firma','Leistung','Vertragsnummer','NaechsterTermin (JJJJ-MM-TT)','IntervallMonate','Ansprechpartner','Telefon','Email','Bemerkung']];
   for (var j = 0; j < S.vertraege.length; j++) {
     var v = S.vertraege[j];
     vertraegeRows.push([v.standort,v.firma,v.leistung||'',v.vertragsNummer||'',v.naechsterTermin||'',v.intervallMonate||'',v.ansprechpartner||'',v.telefon||'',v.email||'',v.bemerkung||'']);
   }
   var wsVertraege = XLSX.utils.aoa_to_sheet(vertraegeRows);
-  wsVertraege['!cols'] = [{wch:16},{wch:22},{wch:22},{wch:14},{wch:14},{wch:8},{wch:20},{wch:16},{wch:26},{wch:28}];
+  wsVertraege['!cols'] = [{wch:18},{wch:22},{wch:22},{wch:16},{wch:22},{wch:8},{wch:20},{wch:16},{wch:26},{wch:30}];
+  wsVertraege['!dataValidations'] = [dv('A', ddStandort), dv('F', ddIntervall)];
   XLSX.utils.book_append_sheet(wb, wsVertraege, 'Vertraege');
 
-  // Blatt 3: Kontakte
+  // ── Blatt 3: Kontakte ──
   var kontakteRows = [['Standort','Name','Rolle','Telefon','Email','Bemerkung']];
   for (var k = 0; k < S.kontakte.length; k++) {
     var kt = S.kontakte[k];
     kontakteRows.push([kt.standort,kt.name,kt.rolle,kt.telefon||'',kt.email||'',kt.bemerkung||'']);
   }
   var wsKontakte = XLSX.utils.aoa_to_sheet(kontakteRows);
-  wsKontakte['!cols'] = [{wch:16},{wch:22},{wch:18},{wch:16},{wch:26},{wch:28}];
+  wsKontakte['!cols'] = [{wch:18},{wch:22},{wch:18},{wch:16},{wch:26},{wch:30}];
+  wsKontakte['!dataValidations'] = [dv('A', ddStandort), dv('C', ddRolle)];
   XLSX.utils.book_append_sheet(wb, wsKontakte, 'Kontakte');
 
-  // Blatt 4: Aufgaben
-  var aufgabenRows = [['Nr','Aufgabe','Zustaendig','Frist','Status','Bemerkung']];
+  // ── Blatt 4: Aufgaben ──
+  var aufgabenRows = [['Nr','Aufgabe','Zustaendig','Frist (JJJJ-MM-TT)','Status','Bemerkung']];
   for (var t = 0; t < S.aufgaben.length; t++) {
     var ag = S.aufgaben[t];
     aufgabenRows.push([ag.nr||'',ag.aufgabe,ag.zustaendig||'',ag.frist||'',ag.status,ag.bemerkung||'']);
   }
   var wsAufgaben = XLSX.utils.aoa_to_sheet(aufgabenRows);
-  wsAufgaben['!cols'] = [{wch:5},{wch:42},{wch:22},{wch:12},{wch:12},{wch:28}];
+  wsAufgaben['!cols'] = [{wch:5},{wch:44},{wch:22},{wch:18},{wch:14},{wch:30}];
+  wsAufgaben['!dataValidations'] = [dv('E', ddStatus)];
   XLSX.utils.book_append_sheet(wb, wsAufgaben, 'Aufgaben');
 
   var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -2280,7 +2296,7 @@ function importXLSX(file) {
 
       // Anlagen
       if (wb.SheetNames.indexOf('Anlagen') !== -1) {
-        var rows = XLSX.utils.sheet_to_json(wb.Sheets['Anlagen']);
+        var rows = XLSX.utils.sheet_to_json(wb.Sheets['Anlagen'], {range:1});
         var added = 0, skipped = 0;
         for (var i = 0; i < rows.length; i++) {
           var r = rows[i];
@@ -2308,7 +2324,7 @@ function importXLSX(file) {
 
       // Verträge
       if (wb.SheetNames.indexOf('Vertraege') !== -1) {
-        var vrows = XLSX.utils.sheet_to_json(wb.Sheets['Vertraege']);
+        var vrows = XLSX.utils.sheet_to_json(wb.Sheets['Vertraege'], {range:1});
         var vadd = 0, vskip = 0;
         for (var vi = 0; vi < vrows.length; vi++) {
           var vr = vrows[vi];
@@ -2337,7 +2353,7 @@ function importXLSX(file) {
 
       // Kontakte
       if (wb.SheetNames.indexOf('Kontakte') !== -1) {
-        var krows = XLSX.utils.sheet_to_json(wb.Sheets['Kontakte']);
+        var krows = XLSX.utils.sheet_to_json(wb.Sheets['Kontakte'], {range:1});
         var kadd = 0, kskip = 0;
         for (var ki = 0; ki < krows.length; ki++) {
           var kr = krows[ki];
@@ -2363,7 +2379,7 @@ function importXLSX(file) {
 
       // Aufgaben
       if (wb.SheetNames.indexOf('Aufgaben') !== -1) {
-        var arows = XLSX.utils.sheet_to_json(wb.Sheets['Aufgaben']);
+        var arows = XLSX.utils.sheet_to_json(wb.Sheets['Aufgaben'], {range:1});
         var aadd = 0, askip = 0;
         for (var ai = 0; ai < arows.length; ai++) {
           var ar = arows[ai];
