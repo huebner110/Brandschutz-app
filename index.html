@@ -1026,6 +1026,7 @@ function vSummary() {
     '<button class="btn-primary" data-action="export">Protokoll exportieren (PDF)</button>' +
     '<button class="btn-dark" data-action="do-csv">CSV exportieren</button>' +
     '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Per E-Mail versenden</button></a>' +
+    '<button class="btn-outline" data-action="edit-insp">Begehung nachbearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Neue Begehung</button>' +
     '</div></div>';
 }
@@ -2200,6 +2201,27 @@ function importKontakteCSV(rows) {
   render();
 }
 
+/* ── AUTO-BACKUP BEGEHUNGEN ── */
+function backupBegehungen() {
+  try {
+    var data = {
+      version: 1,
+      exportDatum: new Date().toISOString(),
+      inspections: S.inspections
+    };
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var d = new Date();
+    var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'begehungen-backup-' + ds + '.json';
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+  } catch(e) { /* silent */ }
+}
+
 /* ── XLSX EXPORT ── */
 function exportXLSX() {
   if (typeof XLSX === 'undefined') {
@@ -3078,7 +3100,8 @@ document.addEventListener('click', function(e) {
     return;
   }
 
-  if (a.action === 'finish-insp') { saveInsp(); nav('summary'); return; }
+  if (a.action === 'edit-insp') { nav('inspection'); return; }
+  if (a.action === 'finish-insp') { saveInsp(); backupBegehungen(); nav('summary'); return; }
   if (a.action === 'export') { doExport(); return; }
   if (a.action === 'do-csv') { doCSV(); return; }
 
@@ -3086,7 +3109,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'cancel-unterschrift') { nav('summary'); return; }
   if (a.action === 'save-unterschrift') {
     var canvas = document.getElementById('sig-canvas');
-    if (canvas) { S.currentInspection.unterschrift = canvas.toDataURL('image/png'); saveInsp(); }
+    if (canvas) { S.currentInspection.unterschrift = canvas.toDataURL('image/png'); saveInsp(); backupBegehungen(); }
     nav('summary'); return;
   }
 
