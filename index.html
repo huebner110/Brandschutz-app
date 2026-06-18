@@ -874,6 +874,10 @@ function vInspection() {
     ? '<button class="btn-primary" data-action="finish-insp">Begehung abschließen</button>'
     : '<button class="btn-outline" data-action="finish-insp">Jetzt abschließen (' + checked + '/' + totalItems + ')</button>';
 
+  var locOptsInsp = LOCATIONS.map(function(l) {
+    return '<option value="' + l + '"' + (l === insp.standort ? ' selected' : '') + '>' + l + '</option>';
+  }).join('');
+
   return '<div class="header header-dark">' +
     '<button class="icon-btn" data-action="back-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center">' +
@@ -884,6 +888,16 @@ function vInspection() {
     '<div class="progress-bar-outer"><div class="progress-bar-inner" style="width:' + pct + '%"></div></div>' +
     '<div class="progress-label">' + pct + '% abgeschlossen</div></div>' +
     '<div class="content" style="padding-bottom:calc(80px + var(--safe-bottom))">' +
+    '<div class="card" style="margin-bottom:12px">' +
+    '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Standort</label>' +
+    '<select class="form-select" onchange="changeInspStandort(this.value)">' + locOptsInsp + '</select></div>' +
+    '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Datum</label>' +
+    '<input type="date" class="form-input" value="' + insp.datum + '" onchange="changeInspDatum(this.value)"></div>' +
+    '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Begeher</label>' +
+    '<input type="text" class="form-input" value="' + (insp.begeher || '') + '" placeholder="Name" onblur="changeInspBegeher(this.value)"></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label class="form-label">Anwesende Personen</label>' +
+    '<input type="text" class="form-input" value="' + (insp.anwesende || '') + '" placeholder="z.B. Centerleiter" onblur="changeInspAnwesende(this.value)"></div>' +
+    '</div>' +
     catsHtml + '</div>' +
     '<div class="bottom-bar">' + finishBtn + '</div>';
 }
@@ -2199,6 +2213,29 @@ function importKontakteCSV(rows) {
   save();
   alert(added + ' Kontakte importiert' + (skipped > 0 ? ', ' + skipped + ' übersprungen.' : '.'));
   render();
+}
+
+/* ── STANDORT IN BEGEHUNG ÄNDERN ── */
+function changeInspStandort(val) {
+  if (!S.currentInspection || !val) return;
+  S.currentInspection.standort = val;
+  saveInsp();
+  render();
+}
+function changeInspDatum(val) {
+  if (!S.currentInspection || !val) return;
+  S.currentInspection.datum = val;
+  saveInsp();
+}
+function changeInspBegeher(val) {
+  if (!S.currentInspection) return;
+  S.currentInspection.begeher = val;
+  saveInsp();
+}
+function changeInspAnwesende(val) {
+  if (!S.currentInspection) return;
+  S.currentInspection.anwesende = val;
+  saveInsp();
 }
 
 /* ── AUTO-BACKUP BEGEHUNGEN ── */
