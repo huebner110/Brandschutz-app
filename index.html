@@ -2180,7 +2180,28 @@ function exportBackup() {
 function importBackup(text) {
   try {
     var data = JSON.parse(text);
-    if (!data.version || !data.inspections) { alert('Ungültige Backup-Datei.'); return; }
+    if (!data.inspections) { alert('Ungültige Backup-Datei.'); return; }
+
+    // Begehungs-Backup (version 1): nur Begehungen zusammenführen
+    if (data.version === 1 && !data.categories) {
+      var added = 0, skipped = 0;
+      for (var i = 0; i < data.inspections.length; i++) {
+        var insp = data.inspections[i];
+        if (!insp.id || !insp.standort) { skipped++; continue; }
+        var exists = false;
+        for (var j = 0; j < S.inspections.length; j++) {
+          if (S.inspections[j].id === insp.id) { exists = true; break; }
+        }
+        if (exists) { skipped++; continue; }
+        S.inspections.push(insp);
+        added++;
+      }
+      save(); render();
+      alert('Begehungs-Backup importiert: ' + added + ' wiederhergestellt, ' + skipped + ' bereits vorhanden.');
+      return;
+    }
+
+    // Voll-Backup (version 2): alle Daten ersetzen
     if (!confirm('Alle aktuellen App-Daten werden durch das Backup ersetzt. Fortfahren?')) return;
     if (data.categories)    S.categories    = data.categories;
     if (data.inspections)   S.inspections   = data.inspections;
@@ -2195,7 +2216,7 @@ function importBackup(text) {
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
     if (data.firmierung)    S.firmierung    = data.firmierung;
     save();
-    alert('Backup vom ' + fmtDate(data.exportDatum) + ' erfolgreich wiederhergestellt.');
+    alert('Voll-Backup vom ' + fmtDate(data.exportDatum) + ' erfolgreich wiederhergestellt.');
     nav('home');
   } catch(e) { alert('Fehler beim Lesen der Backup-Datei: ' + e.message); }
 }
@@ -2267,6 +2288,39 @@ function backupBegehungen() {
     a.click();
     setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
   } catch(e) { /* silent */ }
+}
+
+/* ── JSON-IMPORT BEGEHUNGEN ── */
+function importBegehungenJSON(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      var imported = data.inspections || data;
+      if (!Array.isArray(imported)) {
+        alert('Ungültiges Backup-Format.');
+        return;
+      }
+      var added = 0, skipped = 0;
+      for (var i = 0; i < imported.length; i++) {
+        var insp = imported[i];
+        if (!insp.id || !insp.standort) { skipped++; continue; }
+        var exists = false;
+        for (var j = 0; j < S.inspections.length; j++) {
+          if (S.inspections[j].id === insp.id) { exists = true; break; }
+        }
+        if (exists) { skipped++; continue; }
+        S.inspections.push(insp);
+        added++;
+      }
+      save();
+      render();
+      alert('Backup importiert: ' + added + ' Begehungen wiederhergestellt, ' + skipped + ' bereits vorhanden.');
+    } catch(err) {
+      alert('Fehler beim Lesen der Backup-Datei: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
 }
 
 /* ── XLSX EXPORT ── */
@@ -3705,6 +3759,15 @@ document.addEventListener('DOMContentLoaded', function() {
     S.lastStandort = locParam;
   }
   render();
+  // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
+  if (S.inspections.length > 0) {
+    var lastBackup = localStorage.getItem('bs2_last_backup_date');
+    var todayStr = today();
+    if (lastBackup !== todayStr) {
+      localStorage.setItem('bs2_last_backup_date', todayStr);
+      setTimeout(function() { backupBegehungen(); }, 1500);
+    }
+  }
 });
 </script>
 </body>
