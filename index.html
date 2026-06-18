@@ -3549,8 +3549,9 @@ function doExport() {
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
     '<title>Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
     '<style>' +
-    '@page{margin:20mm 18mm 0;size:A4;}' +
-    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;}' +
+    '@page{margin:0;size:A4;}' +
+    'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:11pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
@@ -3636,8 +3637,9 @@ function doExportUW() {
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
     '<title>Unterweisungsnachweis ' + uw.standort + ' ' + fmtDate(uw.datum) + '</title>' +
     '<style>' +
-    '@page{margin:20mm 18mm 0;size:A4;}' +
-    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;}' +
+    '@page{margin:0;size:A4;}' +
+    'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:10.5pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #ed8b00;padding-bottom:10px;margin-bottom:14px;}' +
