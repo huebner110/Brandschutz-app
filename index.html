@@ -3350,12 +3350,12 @@ document.getElementById('photo-input').addEventListener('change', function(e) {
       reader.onload = function(ev) {
         img.onload = function() {
           var canvas = document.createElement('canvas');
-          var MAX = 1200;
+          var MAX = 800;
           var w = img.width, h = img.height;
           if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
           canvas.width = w; canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          results.push(canvas.toDataURL('image/jpeg', 0.75));
+          results.push(canvas.toDataURL('image/jpeg', 0.65));
           done++;
           if (done === files.length) {
             if (target.type === 'defect') {
