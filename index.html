@@ -287,7 +287,12 @@ var AUFGABEN_DEFAULT = [
   { id:'ag5', nr:5, aufgabe:'Überblick: Beschilderung Fluchtwege / Brandschutz je Center', zustaendig:'T. Hübner', frist:'2026-06-30', status:'Offen', bemerkung:'Begehung aller Standorte, Mängel dokumentieren' },
   { id:'ag6', nr:6, aufgabe:'Brandschutzverordnung und Unterlagen in OneNote durchsehen', zustaendig:'T. Hübner', frist:'2026-06-15', status:'Offen', bemerkung:'Unterlagen auf Aktualität prüfen, ggf. aktualisieren' },
   { id:'ag7', nr:7, aufgabe:'Kontaktdaten BSB an BMAs/BMZs aller Standorte hinterlegen', zustaendig:'S. Treu', frist:'2026-06-15', status:'Offen', bemerkung:'Ansprechpartner vor Ort und bei Alarm aktuell halten' },
-  { id:'ag8', nr:8, aufgabe:'Schulungsturnus (alle 2 Jahre) planen und koordinieren', zustaendig:'Personal / T. Hübner', frist:'2026-07-31', status:'Offen', bemerkung:'Nächste Schulung terminieren; Reminder einrichten' }
+  { id:'ag8', nr:8, aufgabe:'Schulungsturnus (alle 2 Jahre) planen und koordinieren', zustaendig:'Personal / T. Hübner', frist:'2026-07-31', status:'Offen', bemerkung:'Nächste Schulung terminieren; Reminder einrichten' },
+  { id:'ag9', nr:9, aufgabe:'Info-Mails nachfragen: T. Hübner als Kontaktperson eintragen lassen', zustaendig:'T. Hübner', frist:'2026-06-30', status:'Offen', bemerkung:'Bisher keine Mails erhalten; nachhaken bei zuständiger Stelle (Beschluss Termin 18.06.2026)' },
+  { id:'ag10', nr:10, aufgabe:'Bisherige Begehungsreports an M. Munoz-Bauer senden', zustaendig:'T. Hübner', frist:'2026-06-30', status:'Offen', bemerkung:'Reporting-Tool läuft lokal; erstellte Reports exportieren und an MMB schicken' },
+  { id:'ag11', nr:11, aufgabe:'Mietvertragsunterlagen bei S. Wagner anfragen', zustaendig:'T. Hübner', frist:'2026-07-11', status:'Offen', bemerkung:'Einsicht in Mietverträge für Zuständigkeitsklärung Brandschutz je Standort' },
+  { id:'ag12', nr:12, aufgabe:'Feuerlöscher: Angebot für Sendling und WERK12 einholen und prüfen', zustaendig:'T. Hübner', frist:'2026-07-11', status:'Offen', bemerkung:'Prüfung und Beauftragung Wartungsangebot Feuerlöscher Center Sendling (SE) und WERK12' },
+  { id:'ag13', nr:13, aufgabe:'Schulungsinhalte (monatlich, 60 Min.) mit MMB erarbeiten', zustaendig:'T. Hübner / M. Munoz-Bauer', frist:'2026-08-31', status:'Offen', bemerkung:'Start Schulungsreihe September 2026; Inhalte vorab abstimmen' }
 ];
 
 var S = {
@@ -1021,7 +1026,9 @@ function vSummary() {
   var mailtoHref = 'mailto:' + (S.defaultEmail || '') + '?subject=' + subject + '&body=' + body;
 
   return '<div class="header header-dark">' +
-    '<div class="header-title">Begehungsprotokoll</div></div>' +
+    '<button class="icon-btn" data-action="go-home"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Begehungsprotokoll</div></div>' +
+    '<div style="width:36px"></div></div>' +
     '<div class="content">' +
     '<div class="summary-hero">' +
     '<div class="summary-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' +
@@ -3091,6 +3098,7 @@ document.addEventListener('click', function(e) {
 
   if (a.action === 'check-photo') {
     S.currentPhotoTarget = { type: 'check', iid: a.iid };
+    saveInsp();
     document.getElementById('photo-input').click(); return;
   }
 
@@ -3153,6 +3161,7 @@ document.addEventListener('click', function(e) {
     mSave.bedenken = bedenkenCb ? bedenkenCb.checked : false;
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
     S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
+    saveInsp();
     nav('inspection'); return;
   }
 
@@ -3168,6 +3177,7 @@ document.addEventListener('click', function(e) {
       S.currentInspection.maengel.push(mDring);
     }
     mDring.dringlichkeit = a.val;
+    saveInsp();
     var btns = document.querySelectorAll('[data-action="set-dring"]');
     for (var b = 0; b < btns.length; b++) {
       var bv = btns[b].dataset.val;
@@ -3188,7 +3198,29 @@ document.addEventListener('click', function(e) {
   }
 
   if (a.action === 'add-photo-defect') {
+    // Formularfelder vor Kameraöffnung sichern (iOS-Schutz)
+    var maengelAp = S.currentInspection.maengel || [];
+    var mAp = null;
+    for (var map = 0; map < maengelAp.length; map++) {
+      if (maengelAp[map].id === S.currentDefectId) { mAp = maengelAp[map]; break; }
+    }
+    if (!mAp) {
+      mAp = { id: S.currentDefectId, checkId: S.currentDefectCheckId, checkName: S.currentDefectCheckName, fotos: [], dringlichkeit: 'mittel', behoben: false };
+      if (!S.currentInspection.maengel) S.currentInspection.maengel = [];
+      S.currentInspection.maengel.push(mAp);
+    }
+    var apBeschr = document.getElementById('d-beschr');
+    var apZust = document.getElementById('d-zust');
+    var apFrist = document.getElementById('d-frist');
+    var apBedenken = document.getElementById('d-bedenken');
+    if (apBeschr) mAp.beschreibung = apBeschr.value;
+    if (apZust) mAp.zustaendig = apZust.value;
+    if (apFrist) mAp.frist = apFrist.value;
+    if (apBedenken) mAp.bedenken = apBedenken.checked;
+    if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
+    S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
     S.currentPhotoTarget = { type: 'defect' };
+    saveInsp();
     document.getElementById('photo-input').click(); return;
   }
 
@@ -3456,6 +3488,7 @@ function doCSV() {
 
 /* ── PDF EXPORT ── */
 function doExport() {
+  saveInsp();
   var insp = S.currentInspection;
   var c = inspCounts(insp);
   var checks = insp.checks || {};
