@@ -3642,6 +3642,7 @@ function doExport() {
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:11pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '@media print{.no-print{display:none!important;}}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #ed8b00;padding-bottom:10px;margin-bottom:14px;}' +
     '.company{font-size:8pt;color:#717D7E;margin-top:2px;}' +
     '.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}' +
@@ -3694,6 +3695,7 @@ function doExport() {
     '</div>' +
     '<h2>Prüfliste</h2>' + tableRows + maengelSection + sigSection + bedenkenSection +
     '<div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner</div>' +
+    '<div class="no-print" style="text-align:center;padding:20px 0 30px"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:12px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
     '</body></html>';
 
@@ -3733,6 +3735,7 @@ function doExportUW() {
     '.company{font-size:8pt;color:#717D7E;margin-top:2px;}' +
     '.logo-pdf{height:32px;display:block;}' +
     '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '@media print{.no-print{display:none!important;}}' +
     '.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}' +
     '.meta-box{background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:7px 10px;}' +
     '.meta-lbl{font-size:7pt;color:#717D7E;text-transform:uppercase;letter-spacing:0.4px;}' +
@@ -3764,6 +3767,7 @@ function doExportUW() {
     '<div style="font-size:7.5pt;color:#717D7E">' + uw.unterweiser + ', Brandschutzbeauftragter &middot; ' + fmtDate(uw.datum) + '</div></div>' +
     '</div>' +
     '<div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner</div>' +
+    '<div class="no-print" style="text-align:center;padding:20px 0 30px"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:12px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
     '</body></html>';
 
