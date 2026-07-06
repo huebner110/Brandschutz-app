@@ -108,6 +108,9 @@
     .check-item-mangel { background: var(--crit-bg); }
     .check-item-na { background: var(--na-bg); }
     .check-item-name { font-size: 13px; line-height: 1.4; margin-bottom: 8px; }
+    .check-stockwerk-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .check-stockwerk-select { appearance: none; -webkit-appearance: none; background-color: var(--bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23808B96' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; border: 1px solid var(--border); border-radius: 7px; padding: 4px 26px 4px 9px; font-size: 11px; font-weight: 600; color: var(--text-light); font-family: inherit; }
+    .check-stockwerk-custom { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; font-size: 11px; color: var(--text); background: #fff; font-family: inherit; }
     .check-buttons { display: flex; gap: 6px; }
     .check-btn { flex: 1; padding: 7px 4px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; color: var(--text-light); }
     .check-btn:active { opacity: 0.7; }
@@ -217,6 +220,7 @@ window.onerror = function(msg, src, line) {
 
 var LOCATIONS = ['Brunnthal','Englischer Garten','Erding','Hirschgarten','München Mitte','München Nord','Sendling','Theresienhöhe','Trudering','WERK12'];
 var NETLIFY_URL = 'https://peppy-alpaca-9e0a9e.netlify.app';
+var FLOOR_OPTIONS = ['EG','1.OG','2.OG','3.OG','DG','UG','2.UG'];
 
 var DEFAULT_CATEGORIES = [
   { id:'bst', name:'Brandschutztüren', items:[
@@ -807,14 +811,14 @@ function vInspection() {
   var insp = S.currentInspection;
   var checks = insp.checks || {};
   var totalItems = S.categories.reduce(function(n, c) { return n + c.items.length; }, 0);
-  var checked = Object.keys(checks).length;
+  var checked = Object.values(checks).filter(function(v) { return v.status; }).length;
   var pct = totalItems > 0 ? Math.round(checked / totalItems * 100) : 0;
   var allDone = checked === totalItems;
 
   var catsHtml = '';
   for (var ci = 0; ci < S.categories.length; ci++) {
     var cat = S.categories[ci];
-    var catChecked = cat.items.filter(function(i) { return checks[i.id]; }).length;
+    var catChecked = cat.items.filter(function(i) { return checks[i.id] && checks[i.id].status; }).length;
     var collapsed = S.collapsedCats[cat.id];
     var itemsHtml = '';
     if (!collapsed) {
@@ -834,6 +838,19 @@ function vInspection() {
             '<span class="dring-badge dring-' + mangel.dringlichkeit + '">' + mangel.dringlichkeit + '</span></div>';
         }
         var safeName = item.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        var floorMode = check.stockwerkMode;
+        var stockwerk = check.stockwerk || '';
+        var floorSelectVal = floorMode === 'custom' ? 'custom' : stockwerk;
+        var floorOptsHtml = '<option value="">Stockwerk wählen</option>' + FLOOR_OPTIONS.map(function(f) {
+          return '<option value="' + f + '"' + (floorSelectVal === f ? ' selected' : '') + '>' + f + '</option>';
+        }).join('') + '<option value="custom"' + (floorSelectVal === 'custom' ? ' selected' : '') + '>Sonstige…</option>';
+        var floorCustomHtml = floorSelectVal === 'custom'
+          ? '<input type="text" class="check-stockwerk-custom" value="' + stockwerk.replace(/"/g,'&quot;') + '" placeholder="z.B. 1.OG links" onblur="setCheckStockwerkText(\'' + item.id + '\', this.value)">'
+          : '';
+        var stockwerkHtml = '<div class="check-stockwerk-row">' +
+          '<select class="check-stockwerk-select" onchange="setCheckStockwerk(\'' + item.id + '\', this.value)">' + floorOptsHtml + '</select>' +
+          floorCustomHtml +
+          '</div>';
         var extraHtml = '';
         if (status === 'ok' || status === 'na') {
           var notizActive = check.notiz ? ' check-extra-btn-active' : '';
@@ -857,6 +874,7 @@ function vInspection() {
         }
         itemsHtml += '<div class="check-item' + (status ? ' check-item-' + status : '') + '">' +
           '<div class="check-item-name">' + item.name + '</div>' +
+          stockwerkHtml +
           mangelPreview + extraHtml +
           '<div class="check-buttons">' +
           '<button class="check-btn check-btn-ok' + (status === 'ok' ? ' active' : '') + '" data-action="check-ok" data-iid="' + item.id + '">OK</button>' +
@@ -999,6 +1017,7 @@ function vSummary() {
         '<span class="mangel-card-cat">' + (cat ? cat.name : '') + '</span>' +
         '<div style="display:flex;gap:4px;align-items:center">' + bedenkenBadge + '<span class="dring-badge dring-' + m.dringlichkeit + '">' + (m.behoben ? 'behoben' : m.dringlichkeit) + '</span></div></div>' +
         '<div class="mangel-card-item">' + m.checkName + '</div>' +
+        ((insp.checks[m.checkId] || {}).stockwerk ? '<div class="mangel-card-frist">Stockwerk: ' + insp.checks[m.checkId].stockwerk + '</div>' : '') +
         '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
         (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
         (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
@@ -2275,6 +2294,27 @@ function changeInspAnwesende(val) {
   S.currentInspection.anwesende = val;
   saveInsp();
 }
+function setCheckStockwerk(iid, val) {
+  if (!S.currentInspection) return;
+  if (!S.currentInspection.checks[iid]) S.currentInspection.checks[iid] = {};
+  var ch = S.currentInspection.checks[iid];
+  if (val === 'custom') {
+    ch.stockwerkMode = 'custom';
+  } else {
+    delete ch.stockwerkMode;
+    ch.stockwerk = val;
+  }
+  saveInsp();
+  render();
+}
+function setCheckStockwerkText(iid, val) {
+  if (!S.currentInspection) return;
+  if (!S.currentInspection.checks[iid]) S.currentInspection.checks[iid] = {};
+  S.currentInspection.checks[iid].stockwerk = val.trim();
+  S.currentInspection.checks[iid].stockwerkMode = 'custom';
+  saveInsp();
+  render();
+}
 
 /* ── AUTO-BACKUP BEGEHUNGEN ── */
 function backupBegehungen() {
@@ -3508,8 +3548,9 @@ function doExport() {
       for (var mi = 0; mi < maengel.length; mi++) {
         if (maengel[mi].checkId === item.id) { m = maengel[mi]; break; }
       }
+      var stockwerkTd = '<td>' + (ch.stockwerk || '') + '</td>';
       if (!ch.status) {
-        rows += '<tr><td>' + item.name + '</td><td class="s-na">–</td><td></td></tr>';
+        rows += '<tr><td>' + item.name + '</td>' + stockwerkTd + '<td class="s-na">–</td><td></td></tr>';
       } else {
         var st = ch.status === 'ok' ? 'In Ordnung' : ch.status === 'mangel' ? 'Mangel' : 'N.A.';
         var sc = ch.status === 'ok' ? 's-ok' : ch.status === 'mangel' ? 's-mn' : 's-na';
@@ -3522,10 +3563,10 @@ function doExport() {
           }
           checkFotosHtml += '</div>';
         }
-        rows += '<tr><td>' + item.name + '</td><td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
+        rows += '<tr><td>' + item.name + '</td>' + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
       }
     }
-    tableRows += '<table><thead><tr><th style="width:58%">' + cat.name + '</th><th style="width:13%">Status</th><th>Bemerkung</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    tableRows += '<table><thead><tr><th style="width:44%">' + cat.name + '</th><th style="width:12%">Stockwerk</th><th style="width:13%">Status</th><th>Bemerkung</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   var maengelSection = '';
@@ -3549,11 +3590,12 @@ function doExport() {
       }
       var dringCap = mg.dringlichkeit.charAt(0).toUpperCase() + mg.dringlichkeit.slice(1);
       var behobHtml = mg.behoben ? '<span class="db" style="background:#F2F3F4;color:#808B96">Behoben ' + (mg.behobDatum ? fmtDate(mg.behobDatum) : '') + '</span>' : '';
+      var mgStockwerk = (checks[mg.checkId] || {}).stockwerk || '';
       maengelSection += '<div class="mb">' +
         '<div class="mb-h"><strong>' + (mi2+1) + '. ' + mg.checkName + '</strong>' +
         '<div style="display:flex;gap:4px"><span class="db ' + dc + '">' + dringCap + '</span>' + behobHtml + '</div></div>' +
         '<div class="mb-b">' +
-        (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + '</div>' : '') +
+        (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + (mgStockwerk ? ' &middot; Stockwerk: ' + mgStockwerk : '') + '</div>' : (mgStockwerk ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Stockwerk: ' + mgStockwerk + '</div>' : '')) +
         '<div>' + (mg.beschreibung || '') + '</div>' +
         (mg.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + mg.zustaendig + '</div>' : '') +
         (mg.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(mg.frist) + '</div>' : '') +
@@ -3567,6 +3609,13 @@ function doExport() {
   } else {
     sigSection = '<div class="sig"><div class="sig-box"><div class="sig-line"></div><div class="sig-lbl">' + insp.begeher + ' &middot; ' + fmtDate(insp.datum) + '</div></div></div>';
   }
+
+  var statsSection = '<h2>Zusammenfassung</h2><div class="stats">' +
+    '<div class="stat"><div class="stat-n n-ok">' + c.ok + '</div><div class="stat-l">In Ordnung</div></div>' +
+    '<div class="stat"><div class="stat-n n-w">' + c.mangel + '</div><div class="stat-l">Mängel</div></div>' +
+    '<div class="stat"><div class="stat-n n-c">' + c.kritisch + '</div><div class="stat-l">Kritisch</div></div>' +
+    '<div class="stat"><div class="stat-n n-na">' + c.na + '</div><div class="stat-l">Nicht anwendbar</div></div>' +
+    '</div>';
 
   // Bedenkenanzeige-Mängel sammeln
   var bedenkenMaengel = [];
@@ -3688,13 +3737,7 @@ function doExport() {
     '<div class="meta-box"><div class="meta-lbl">Begeher</div><div class="meta-val">' + insp.begeher + '</div></div>' +
     (insp.anwesende ? '<div class="meta-box" style="grid-column:1/-1"><div class="meta-lbl">Anwesende Personen</div><div class="meta-val" style="font-size:10pt">' + insp.anwesende + '</div></div>' : '') +
     '</div>' +
-    '<div class="stats">' +
-    '<div class="stat"><div class="stat-n n-ok">' + c.ok + '</div><div class="stat-l">In Ordnung</div></div>' +
-    '<div class="stat"><div class="stat-n n-w">' + c.mangel + '</div><div class="stat-l">Mängel</div></div>' +
-    '<div class="stat"><div class="stat-n n-c">' + c.kritisch + '</div><div class="stat-l">Kritisch</div></div>' +
-    '<div class="stat"><div class="stat-n n-na">' + c.na + '</div><div class="stat-l">Nicht anwendbar</div></div>' +
-    '</div>' +
-    '<h2>Prüfliste</h2>' + tableRows + maengelSection + sigSection + bedenkenSection +
+    '<h2>Prüfliste</h2>' + tableRows + maengelSection + statsSection + sigSection + bedenkenSection +
     '<div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner</div>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
     '</body></html>';
