@@ -342,10 +342,126 @@ var LOGO_HTML = '<div class="logo-wrap">' +
   '<span class="logo-txt">body + soul</span>' +
   '</div>';
 
+/* ── FOTO-SPEICHER (IndexedDB) ──
+   Fotos sprengen schnell die localStorage-Quota (~5-10MB im Browser). Deshalb werden
+   sie getrennt vom übrigen App-Zustand in IndexedDB abgelegt (viel größere Quota) und
+   beim Laden wieder in S.inspections eingefügt. Am Datenmodell selbst (insp.checks[x].fotos,
+   mangel.fotos) ändert sich dadurch nichts, nur WO die Fotos dauerhaft liegen. */
+var PHOTO_DB_NAME = 'bs2_photos_db';
+var PHOTO_STORE = 'photos';
+
+function openPhotoDB() {
+  return new Promise(function(resolve) {
+    if (!window.indexedDB) { resolve(null); return; }
+    try {
+      var req = indexedDB.open(PHOTO_DB_NAME, 1);
+      req.onupgradeneeded = function(e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE);
+      };
+      req.onsuccess = function(e) { resolve(e.target.result); };
+      req.onerror = function(e) { console.warn('IndexedDB konnte nicht geöffnet werden', e); resolve(null); };
+    } catch(e) { console.warn('IndexedDB nicht verfügbar', e); resolve(null); }
+  });
+}
+
+function photoDbPut(inspId, photoData) {
+  return openPhotoDB().then(function(db) {
+    if (!db) return;
+    return new Promise(function(resolve) {
+      try {
+        var tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx.objectStore(PHOTO_STORE).put(photoData, inspId);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function(e) { console.warn('Foto-Speicherung fehlgeschlagen', e); resolve(); };
+      } catch(e) { console.warn('Foto-Speicherung fehlgeschlagen', e); resolve(); }
+    });
+  });
+}
+
+function photoDbDelete(inspId) {
+  return openPhotoDB().then(function(db) {
+    if (!db) return;
+    return new Promise(function(resolve) {
+      try {
+        var tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx.objectStore(PHOTO_STORE).delete(inspId);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function() { resolve(); };
+      } catch(e) { resolve(); }
+    });
+  });
+}
+
+function photoDbGetAll() {
+  return openPhotoDB().then(function(db) {
+    if (!db) return {};
+    return new Promise(function(resolve) {
+      var result = {};
+      try {
+        var tx = db.transaction(PHOTO_STORE, 'readonly');
+        var req = tx.objectStore(PHOTO_STORE).openCursor();
+        req.onsuccess = function(e) {
+          var cursor = e.target.result;
+          if (cursor) { result[cursor.key] = cursor.value; cursor.continue(); }
+          else resolve(result);
+        };
+        req.onerror = function() { resolve(result); };
+      } catch(e) { resolve(result); }
+    });
+  });
+}
+
+function extractPhotos(insp) {
+  var photoData = { checks: {}, maengel: {} };
+  var checks = insp.checks || {};
+  Object.keys(checks).forEach(function(cid) {
+    if (checks[cid] && checks[cid].fotos && checks[cid].fotos.length) photoData.checks[cid] = checks[cid].fotos;
+  });
+  (insp.maengel || []).forEach(function(m) {
+    if (m.fotos && m.fotos.length) photoData.maengel[m.id] = m.fotos;
+  });
+  return photoData;
+}
+
+function stripPhotosForStorage(inspections) {
+  return inspections.map(function(insp) {
+    var copy = JSON.parse(JSON.stringify(insp));
+    var checks = copy.checks || {};
+    Object.keys(checks).forEach(function(cid) { if (checks[cid] && checks[cid].fotos) checks[cid].fotos = []; });
+    (copy.maengel || []).forEach(function(m) { if (m.fotos) m.fotos = []; });
+    return copy;
+  });
+}
+
+function injectPhotos(inspections, photoMap) {
+  inspections.forEach(function(insp) {
+    var pd = photoMap[insp.id];
+    if (!pd) return;
+    if (pd.checks) {
+      Object.keys(pd.checks).forEach(function(cid) {
+        if (insp.checks && insp.checks[cid]) insp.checks[cid].fotos = pd.checks[cid];
+      });
+    }
+    if (pd.maengel) {
+      (insp.maengel || []).forEach(function(m) {
+        if (pd.maengel[m.id]) m.fotos = pd.maengel[m.id];
+      });
+    }
+  });
+}
+
+function loadPhotosAsync() {
+  return photoDbGetAll().then(function(photoMap) {
+    injectPhotos(S.inspections, photoMap);
+    if (S.currentInspection) injectPhotos([S.currentInspection], photoMap);
+  }).catch(function(e) { console.warn('Fotos laden fehlgeschlagen', e); });
+}
+
 function save() {
   try {
     localStorage.setItem('bs2_cats', JSON.stringify(S.categories));
-    localStorage.setItem('bs2_insps', JSON.stringify(S.inspections));
+    localStorage.setItem('bs2_insps', JSON.stringify(stripPhotosForStorage(S.inspections)));
     localStorage.setItem('bs2_begeher', S.defaultBegeher);
     localStorage.setItem('bs2_standort', S.lastStandort);
     localStorage.setItem('bs2_email', S.defaultEmail);
@@ -359,6 +475,13 @@ function save() {
     localStorage.setItem('bs2_kontakte', JSON.stringify(S.kontakte));
     localStorage.setItem('bs2_aufgaben', JSON.stringify(S.aufgaben));
   } catch(e) { console.warn('Storage full', e); }
+  // Fotos getrennt und asynchron in IndexedDB sichern (blockiert die UI nicht)
+  S.inspections.forEach(function(insp) {
+    var pd = extractPhotos(insp);
+    if (Object.keys(pd.checks).length || Object.keys(pd.maengel).length) {
+      photoDbPut(insp.id, pd);
+    }
+  });
 }
 
 function load() {
@@ -3055,6 +3178,7 @@ document.addEventListener('click', function(e) {
       if (!confirm('Begehung löschen?')) return;
     }
     S.inspections = S.inspections.filter(function(i) { return i.id !== a.id; });
+    photoDbDelete(a.id);
     save(); render();
     return;
   }
@@ -3839,15 +3963,20 @@ document.addEventListener('DOMContentLoaded', function() {
     S.lastStandort = locParam;
   }
   render();
-  // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
-  if (S.inspections.length > 0) {
-    var lastBackup = localStorage.getItem('bs2_last_backup_date');
-    var todayStr = today();
-    if (lastBackup !== todayStr) {
-      localStorage.setItem('bs2_last_backup_date', todayStr);
-      setTimeout(function() { backupBegehungen(); }, 1500);
+  // Fotos liegen in IndexedDB und werden asynchron nachgeladen, dann einmal neu rendern
+  loadPhotosAsync().then(function() {
+    render();
+    // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
+    // (erst NACH dem Nachladen der Fotos, damit das Backup vollständig ist)
+    if (S.inspections.length > 0) {
+      var lastBackup = localStorage.getItem('bs2_last_backup_date');
+      var todayStr = today();
+      if (lastBackup !== todayStr) {
+        localStorage.setItem('bs2_last_backup_date', todayStr);
+        setTimeout(function() { backupBegehungen(); }, 1500);
+      }
     }
-  }
+  });
 });
 </script>
 </body>
