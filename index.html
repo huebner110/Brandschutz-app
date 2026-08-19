@@ -536,6 +536,51 @@ function daysBetween(d1, d2) {
   return Math.round((t2 - t1) / 86400000);
 }
 
+/* Ermittelt je Prüfpunkt den letzten bekannten Zustand über alle Begehungen
+   eines Standorts (chronologisch), und gibt die Mängel zurück, die zuletzt
+   als "Mangel" bewertet und noch nicht als behoben markiert wurden. Wird ein
+   Prüfpunkt in einer späteren Begehung auf OK/N.A. gesetzt, gilt er ab dann
+   als erledigt, unabhängig vom alten Mangel-Eintrag. */
+function letzteOffeneMaengelStandort(standort) {
+  var relevant = S.inspections.filter(function(i) { return i.standort === standort; })
+    .slice().sort(function(a, b) { return (a.datum || '').localeCompare(b.datum || ''); });
+  var state = {};
+  for (var i = 0; i < relevant.length; i++) {
+    var insp = relevant[i];
+    var checks = insp.checks || {};
+    var maengelList = insp.maengel || [];
+    for (var checkId in checks) {
+      var st = checks[checkId].status;
+      if (st === 'ok' || st === 'na') {
+        state[checkId] = null;
+      } else if (st === 'mangel') {
+        var m = null;
+        for (var mi = 0; mi < maengelList.length; mi++) {
+          if (maengelList[mi].checkId === checkId) { m = maengelList[mi]; break; }
+        }
+        if (m) state[checkId] = { mangel: m, datum: insp.datum };
+      }
+    }
+  }
+  var offene = [];
+  for (var cid in state) {
+    if (state[cid] && !state[cid].mangel.behoben) offene.push(state[cid]);
+  }
+  return offene;
+}
+
+function mangelHintText(standort) {
+  var n = letzteOffeneMaengelStandort(standort).length;
+  if (n === 0) return 'Keine offenen Mängel aus früheren Begehungen an diesem Standort.';
+  if (n === 1) return '1 offener Mangel aus früheren Begehungen wird bei "Begehung starten" automatisch übernommen.';
+  return n + ' offene Mängel aus früheren Begehungen werden bei "Begehung starten" automatisch übernommen.';
+}
+
+function updateMangelHint(standort) {
+  var el = document.getElementById('h-mangel-hint');
+  if (el) el.textContent = mangelHintText(standort);
+}
+
 function inspCounts(insp) {
   var checks = insp.checks || {};
   var totalItems = S.categories.reduce(function(n, c) { return n + c.items.length; }, 0);
@@ -794,7 +839,8 @@ function vHome() {
     '<div class="content">' +
     '<div class="card">' +
     '<div class="form-group"><label class="form-label">Standort</label>' +
-    '<select class="form-select" id="h-standort">' + locationOpts + '</select></div>' +
+    '<select class="form-select" id="h-standort" onchange="updateMangelHint(this.value)">' + locationOpts + '</select>' +
+    '<div id="h-mangel-hint" style="font-size:12px;color:var(--text-light);margin-top:4px">' + mangelHintText(S.lastStandort || (LOCATIONS[0] || '')) + '</div></div>' +
     '<div class="form-group"><label class="form-label">Datum</label>' +
     '<input type="date" class="form-input" id="h-datum" value="' + today() + '"></div>' +
     '<div class="form-group"><label class="form-label">Begeher</label>' +
@@ -956,8 +1002,10 @@ function vInspection() {
         }
         var mangelPreview = '';
         if (mangel) {
+          var seitBadge = mangel.uebernommen ? '<span class="dring-badge" style="background:var(--na);color:#fff;white-space:nowrap">seit ' + fmtDate(mangel.uebernommenSeit) + '</span>' : '';
           mangelPreview = '<div class="mangel-preview" data-action="edit-defect" data-mid="' + mangel.id + '" data-cid="' + item.id + '">' +
             '<span class="mangel-preview-text">' + (mangel.beschreibung || 'Mangel – tippen zum Bearbeiten') + '</span>' +
+            seitBadge +
             '<span class="dring-badge dring-' + mangel.dringlichkeit + '">' + mangel.dringlichkeit + '</span></div>';
         }
         var safeName = item.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -1077,6 +1125,7 @@ function vDefect() {
     '<div class="header-sub" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (m.checkName || '') + '</div></div>' +
     '<button class="text-btn" data-action="save-defect">Speichern</button></div>' +
     '<div class="content">' +
+    (m.uebernommen ? '<div class="card" style="background:var(--warn-bg);border-color:var(--warn-border);font-size:12px;color:var(--text)">Übernommen aus der letzten Begehung vom ' + fmtDate(m.uebernommenSeit) + ', dort noch nicht behoben. Weiterhin offen: Angaben bei Bedarf aktualisieren. Behoben: oben bei diesem Prüfpunkt auf "OK" oder "N.A." wechseln.</div>' : '') +
     '<div class="card">' +
     '<div class="form-group"><label class="form-label">Beschreibung *</label>' +
     '<textarea class="form-textarea" id="d-beschr" placeholder="Was genau ist der Mangel?">' + (m.beschreibung || '') + '</textarea></div>' +
@@ -1144,6 +1193,7 @@ function vSummary() {
         '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
         (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
         (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
+        (m.uebernommen ? '<div class="mangel-card-frist">Bereits seit Begehung vom ' + fmtDate(m.uebernommenSeit) + ' offen</div>' : '') +
         fotosPreview + '</div>';
     }
   } else {
@@ -3212,6 +3262,17 @@ document.addEventListener('click', function(e) {
     var anwesende = (document.getElementById('h-anwesende') || {}).value || '';
     S.lastStandort = standort;
     S.currentInspection = { id: uid(), standort: standort, datum: datum, begeher: beg, anwesende: anwesende.trim(), checks: {}, maengel: [] };
+    var offeneVorher = letzteOffeneMaengelStandort(standort);
+    for (var ov = 0; ov < offeneVorher.length; ov++) {
+      var vm = offeneVorher[ov].mangel;
+      S.currentInspection.checks[vm.checkId] = { status: 'mangel' };
+      S.currentInspection.maengel.push({
+        id: uid(), checkId: vm.checkId, checkName: vm.checkName,
+        beschreibung: vm.beschreibung, dringlichkeit: vm.dringlichkeit,
+        zustaendig: vm.zustaendig, frist: vm.frist, fotos: [], behoben: false,
+        uebernommen: true, uebernommenSeit: offeneVorher[ov].datum
+      });
+    }
     S.collapsedCats = {};
     save(); nav('inspection'); return;
   }
@@ -3723,6 +3784,7 @@ function doExport() {
         '<div>' + (mg.beschreibung || '') + '</div>' +
         (mg.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + mg.zustaendig + '</div>' : '') +
         (mg.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(mg.frist) + '</div>' : '') +
+        (mg.uebernommen ? '<div style="font-size:8pt">Bereits seit Begehung vom ' + fmtDate(mg.uebernommenSeit) + ' offen</div>' : '') +
         fotosEx + '</div></div>';
     }
   }
