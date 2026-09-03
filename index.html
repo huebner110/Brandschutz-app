@@ -542,7 +542,7 @@ function daysBetween(d1, d2) {
    Prüfpunkt in einer späteren Begehung auf OK/N.A. gesetzt, gilt er ab dann
    als erledigt, unabhängig vom alten Mangel-Eintrag. */
 function letzteOffeneMaengelStandort(standort) {
-  var relevant = S.inspections.filter(function(i) { return i.standort === standort; })
+  var relevant = S.inspections.filter(function(i) { return i.standort === standort && !i.schnellmeldung; })
     .slice().sort(function(a, b) { return (a.datum || '').localeCompare(b.datum || ''); });
   var state = {};
   for (var i = 0; i < relevant.length; i++) {
@@ -598,9 +598,17 @@ function inspCounts(insp) {
 function lastInspForStandort(standort) {
   var found = null;
   for (var i = S.inspections.length - 1; i >= 0; i--) {
-    if (S.inspections[i].standort === standort) { found = S.inspections[i]; break; }
+    if (S.inspections[i].standort === standort && !S.inspections[i].schnellmeldung) { found = S.inspections[i]; break; }
   }
   return found;
+}
+
+function centerleiterEmailFor(standort) {
+  for (var i = 0; i < S.kontakte.length; i++) {
+    var k = S.kontakte[i];
+    if (k.standort === standort && k.rolle === 'Centerleiter' && k.email) return k.email;
+  }
+  return '';
 }
 
 function nav(view, params) {
@@ -634,6 +642,7 @@ function render() {
     'qr-codes': vQrCodes,
     inspection: vInspection,
     defect: vDefect,
+    'schnellmangel-ergebnis': vSchnellmangelErgebnis,
     summary: vSummary,
     unterschrift: vUnterschrift,
     settings: vSettings,
@@ -791,9 +800,11 @@ function vHome() {
       var insp = recent[r];
       var c = inspCounts(insp);
       var mangelBadge = c.offen > 0 ? '<span class="badge badge-warn">' + c.offen + ' offen</span>' : '';
-      var statusBadge = c.total === c.totalItems
-        ? '<span class="badge badge-ok">Fertig</span>'
-        : '<span class="badge badge-na">' + c.total + '/' + c.totalItems + '</span>';
+      var statusBadge = insp.schnellmeldung
+        ? '<span class="badge badge-crit" style="font-size:10px">Direktmeldung</span>'
+        : (c.total === c.totalItems
+          ? '<span class="badge badge-ok">Fertig</span>'
+          : '<span class="badge badge-na">' + c.total + '/' + c.totalItems + '</span>');
       recentHtml += '<div class="inspection-item" data-action="view-insp" data-id="' + insp.id + '">' +
         '<div class="inspection-item-left">' +
         '<div class="inspection-item-title">' + insp.standort + '</div>' +
@@ -848,6 +859,8 @@ function vHome() {
     '<div class="form-group"><label class="form-label">Anwesende Personen</label>' +
     '<input type="text" class="form-input" id="h-anwesende" placeholder="z.B. Centerleiter, Hausmeister"></div>' +
     '<button class="btn-primary" data-action="start-inspection" style="margin-top:4px">Begehung starten</button>' +
+    '<button class="btn-outline" data-action="start-schnellmangel" style="margin-top:8px">Einzelnen Mangel melden</button>' +
+    '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Für einen einzelnen Mangel ohne vollständige Begehung, z. B. als Bedenkenanzeige.</div>' +
     '</div>' +
     bannerHtml +
     recentHtml +
@@ -1151,6 +1164,68 @@ function vDefect() {
     '<div class="photo-grid" id="photo-grid">' + fotosHtml + '</div></div>' +
     '<button class="btn-danger" data-action="del-defect" style="margin-bottom:20px">Mangel entfernen</button>' +
     '</div>';
+}
+
+/* ── SCHNELLMELDUNG ERGEBNIS ── */
+function vSchnellmangelErgebnis() {
+  var insp = S.currentInspection;
+  var maengel = insp.maengel || [];
+  var m = null;
+  for (var i = 0; i < maengel.length; i++) { if (maengel[i].id === S.currentDefectId) { m = maengel[i]; break; } }
+  if (!m) m = maengel[0] || { beschreibung: '', dringlichkeit: 'mittel', fotos: [] };
+
+  var dringCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
+  var bedenkenBadge = m.bedenken ? '<span class="badge badge-crit" style="font-size:10px">&#9888; Bedenkenanzeige</span>' : '';
+
+  var centerleiterMail = centerleiterEmailFor(insp.standort);
+  var subject, body;
+  if (m.bedenken) {
+    subject = 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum);
+    body = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
+      (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
+      (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
+      (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
+      '\n\nDie vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.\n\nBitte Erhalt bestätigen und Zeitplan zur Mängelbeseitigung mitteilen.\n\n' + insp.begeher;
+  } else {
+    subject = 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum);
+    body = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
+      (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
+      (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
+      (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
+      '\n\n' + insp.begeher;
+  }
+  var mailtoHref = 'mailto:' + centerleiterMail + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  var recipientHint = centerleiterMail
+    ? '<div style="font-size:11px;color:var(--text-light);margin-top:6px">Empfänger: ' + centerleiterMail + ' (Centerleiter ' + insp.standort + ')</div>'
+    : '<div style="font-size:11px;color:var(--warn);margin-top:6px">Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte manuell eintragen.</div>';
+
+  var fotosPreview = '';
+  if (m.fotos && m.fotos.length) {
+    fotosPreview = '<div class="photo-preview-row">';
+    for (var f = 0; f < m.fotos.length; f++) fotosPreview += '<img class="photo-preview-thumb" src="' + m.fotos[f] + '" alt="Foto">';
+    fotosPreview += '</div>';
+  }
+
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Mangel gemeldet</div></div>' +
+    '<div style="width:36px"></div></div>' +
+    '<div class="content">' +
+    '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
+    '<div class="mangel-card-header"><span class="mangel-card-cat">' + insp.standort + ' &middot; ' + fmtDate(insp.datum) + '</span>' +
+    '<div style="display:flex;gap:4px;align-items:center">' + bedenkenBadge + '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div></div>' +
+    '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
+    (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
+    (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
+    fotosPreview + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-bottom:calc(20px + var(--safe-bottom))">' +
+    '<button class="btn-primary" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige exportieren (PDF)' : 'PDF exportieren') + '</button>' +
+    '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Per E-Mail versenden</button></a>' +
+    recipientHint +
+    '<div style="font-size:11px;color:var(--text-light)">PDF vorher exportieren, ein automatischer Anhang an die E-Mail ist technisch nicht möglich.</div>' +
+    '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
+    '<button class="btn-outline" data-action="go-home">Fertig</button>' +
+    '</div></div>';
 }
 
 /* ── SUMMARY ── */
@@ -3277,9 +3352,28 @@ document.addEventListener('click', function(e) {
     save(); nav('inspection'); return;
   }
 
+  if (a.action === 'start-schnellmangel') {
+    var smStandort = document.getElementById('h-standort').value;
+    var smDatum = document.getElementById('h-datum').value || today();
+    var smBeg = document.getElementById('h-begeher').value.trim() || S.defaultBegeher;
+    S.lastStandort = smStandort;
+    var smMid = uid();
+    S.currentInspection = { id: uid(), standort: smStandort, datum: smDatum, begeher: smBeg, anwesende: '', checks: {}, maengel: [], schnellmeldung: true };
+    S.currentDefectId = smMid;
+    S.currentDefectCheckId = 'direkt-' + smMid;
+    S.currentDefectCheckName = 'Direktmeldung (ohne Begehung)';
+    nav('defect'); return;
+  }
+
   if (a.action === 'view-insp') {
     for (var vi = 0; vi < S.inspections.length; vi++) {
-      if (S.inspections[vi].id === a.id) { S.currentInspection = S.inspections[vi]; nav('summary'); break; }
+      if (S.inspections[vi].id === a.id) {
+        S.currentInspection = S.inspections[vi];
+        var viMaengel = S.currentInspection.maengel || [];
+        S.currentDefectId = viMaengel.length ? viMaengel[0].id : null;
+        nav(S.currentInspection.schnellmeldung ? 'schnellmangel-ergebnis' : 'summary');
+        break;
+      }
     }
     return;
   }
@@ -3356,6 +3450,10 @@ document.addEventListener('click', function(e) {
   }
 
   if (a.action === 'cancel-defect') {
+    if (S.currentInspection && S.currentInspection.schnellmeldung) {
+      S.currentInspection = null;
+      nav('home'); return;
+    }
     var maengelCa = S.currentInspection.maengel || [];
     for (var mca = 0; mca < maengelCa.length; mca++) {
       if (maengelCa[mca].id === S.currentDefectId && !maengelCa[mca].beschreibung) {
@@ -3371,6 +3469,7 @@ document.addEventListener('click', function(e) {
     var beschr = (document.getElementById('d-beschr') || {}).value || '';
     var zust = (document.getElementById('d-zust') || {}).value || '';
     var frist = (document.getElementById('d-frist') || {}).value || '';
+    if (S.currentInspection.schnellmeldung && !beschr.trim()) { alert('Bitte Beschreibung eingeben.'); return; }
     var maengelSv = S.currentInspection.maengel || [];
     var mSave = null;
     for (var msv = 0; msv < maengelSv.length; msv++) {
@@ -3387,7 +3486,7 @@ document.addEventListener('click', function(e) {
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
     S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
     saveInsp();
-    nav('inspection'); return;
+    nav(S.currentInspection.schnellmeldung ? 'schnellmangel-ergebnis' : 'inspection'); return;
   }
 
   if (a.action === 'set-dring') {
@@ -3451,9 +3550,17 @@ document.addEventListener('click', function(e) {
 
   if (a.action === 'del-defect') {
     if (confirm('Mangel entfernen?')) {
+      var wasSchnellmeldung = S.currentInspection.schnellmeldung;
       S.currentInspection.maengel = (S.currentInspection.maengel || []).filter(function(x) { return x.id !== S.currentDefectId; });
       delete S.currentInspection.checks[S.currentDefectCheckId];
-      nav('inspection');
+      if (wasSchnellmeldung) {
+        S.inspections = S.inspections.filter(function(x) { return x.id !== S.currentInspection.id; });
+        save();
+        S.currentInspection = null;
+        nav('home');
+      } else {
+        nav('inspection');
+      }
     }
     return;
   }
@@ -3462,6 +3569,8 @@ document.addEventListener('click', function(e) {
   if (a.action === 'finish-insp') { saveInsp(); backupBegehungen(); nav('summary'); return; }
   if (a.action === 'export') { doExport(); return; }
   if (a.action === 'do-csv') { doCSV(); return; }
+  if (a.action === 'edit-schnellmangel') { nav('defect'); return; }
+  if (a.action === 'export-schnellmangel') { doExportSchnellmangel(); return; }
 
   if (a.action === 'go-unterschrift') { nav('unterschrift'); return; }
   if (a.action === 'cancel-unterschrift') { nav('summary'); return; }
@@ -3931,6 +4040,115 @@ function doExport() {
   var w = window.open('', '_blank');
   if (w) { w.document.write(html); w.document.close(); }
   else { alert('Pop-ups fuer diese Seite erlauben, um das Protokoll zu exportieren.'); }
+}
+
+/* ── SCHNELLMELDUNG: PDF-EXPORT ── */
+function doExportSchnellmangel() {
+  var insp = S.currentInspection;
+  var maengel = insp.maengel || [];
+  var m = null;
+  for (var i = 0; i < maengel.length; i++) { if (maengel[i].id === S.currentDefectId) { m = maengel[i]; break; } }
+  if (!m) m = maengel[0];
+  if (!m) return;
+
+  var dCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
+  var dc = m.dringlichkeit === 'gering' ? 'dg' : m.dringlichkeit === 'mittel' ? 'dm' : 'dc';
+  var fotosEx = '';
+  if (m.fotos && m.fotos.length) {
+    fotosEx = '<div class="photos">';
+    for (var fp = 0; fp < m.fotos.length; fp++) { fotosEx += '<img src="' + m.fotos[fp] + '">'; }
+    fotosEx += '</div>';
+  }
+
+  var css = 'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
+    'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
+    'h2{font-size:11pt;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
+    '@media print{.no-print{display:none!important;}}' +
+    '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #ed8b00;padding-bottom:10px;margin-bottom:14px;}' +
+    '.company{font-size:8pt;color:#717D7E;margin-top:2px;}' +
+    '.logo-pdf{height:32px;display:block;}' +
+    '.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}' +
+    '.meta-box{background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:7px 10px;}' +
+    '.meta-lbl{font-size:7pt;color:#717D7E;text-transform:uppercase;letter-spacing:0.4px;}' +
+    '.meta-val{font-size:12pt;font-weight:700;margin-top:1px;}' +
+    '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;}' +
+    '.mb-h{display:flex;justify-content:space-between;align-items:center;background:#F7F9F9;padding:7px 10px;}' +
+    '.mb-b{padding:7px 10px;}' +
+    '.db{display:inline-block;padding:2px 8px;border-radius:10px;font-size:7.5pt;font-weight:700;}' +
+    '.dg{background:#E8F8F0;color:#27AE60;}.dm{background:#FEF9E7;color:#D68910;}.dc{background:#FDEDEC;color:#C0392B;}' +
+    '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}' +
+    '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;}' +
+    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '.bedenken-box{border:2px solid #C0392B;border-radius:6px;padding:12px 14px;margin-bottom:10px;background:#FDEDEC;}' +
+    '.bedenken-title{font-size:11pt;font-weight:700;color:#C0392B;margin-bottom:6px;}' +
+    '.bedenken-text{font-size:9pt;line-height:1.6;}';
+
+  var body;
+  if (m.bedenken) {
+    var fristHtml = '';
+    if (m.frist) {
+      var fristDate = new Date(m.frist);
+      var todayDate = new Date(today());
+      var fristDays = Math.round((fristDate.getTime() - todayDate.getTime()) / 86400000);
+      var fristColor = fristDays < 0 ? '#C0392B' : fristDays <= 7 ? '#D68910' : '#27AE60';
+      var fristLabel = fristDays < 0
+        ? 'Frist überschritten seit ' + Math.abs(fristDays) + ' Tag(en)'
+        : fristDays === 0 ? 'Frist: heute'
+        : 'Frist: ' + fmtDate(m.frist) + ' (noch ' + fristDays + ' Tag' + (fristDays !== 1 ? 'e' : '') + ')';
+      fristHtml = '<br><span style="font-size:8.5pt;font-weight:700;color:' + fristColor + '">' + fristLabel + '</span>';
+    }
+    body = '<div class="top"><div><h1 style="color:#C0392B">Sicherheitstechnische Bedenkenanzeige</h1>' +
+      '<div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
+      '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul">' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:9pt">' +
+      '<tr><td style="width:130px;color:#717D7E;padding:3px 0">An:</td><td><strong>Geschäftsführung ' + S.firmierung + '</strong></td></tr>' +
+      '<tr><td style="color:#717D7E;padding:3px 0">Von:</td><td>' + insp.begeher + ', Brandschutzbeauftragter</td></tr>' +
+      '<tr><td style="color:#717D7E;padding:3px 0">Datum:</td><td>' + fmtDate(insp.datum) + '</td></tr>' +
+      '<tr><td style="color:#717D7E;padding:3px 0">Betreff:</td><td>Bedenkenanzeige, Standort ' + insp.standort + '</td></tr>' +
+      '</table>' +
+      '<div class="bedenken-box">' +
+      '<div class="bedenken-title">&#9888; Sicherheitstechnische Bedenken</div>' +
+      '<div class="bedenken-text">Bei einer Kontrolle am <strong>' + fmtDate(insp.datum) + '</strong> am Standort <strong>' + insp.standort + '</strong> wurde ein Mangel festgestellt, der eine unmittelbare Beeinträchtigung der Brandsicherheit darstellt und dessen Nichtbehebung zu einer erhöhten Gefährdung von Personen und Sachwerten führen kann.</div>' +
+      '</div>' +
+      '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
+      '<span class="db ' + dc + '">' + dCap + '</span></div>' +
+      '<div class="mb-b"><div>' + (m.beschreibung || '') + '</div>' + fristHtml +
+      (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
+      fotosEx + '</div></div>' +
+      '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung des genannten Mangels und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung des aufgeführten Mangels die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
+      '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
+      '<div style="display:flex;justify-content:space-between;margin-top:40px">' +
+      '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">' + insp.begeher + ', Brandschutzbeauftragter &middot; ' + fmtDate(insp.datum) + '</div></div>' +
+      '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">Geschäftsführung &middot; Datum / Unterschrift</div></div>' +
+      '</div>';
+  } else {
+    body = '<div class="top"><div><h1>Mangel-Meldung</h1><div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
+      '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul"></div>' +
+      '<div class="meta">' +
+      '<div class="meta-box"><div class="meta-lbl">Standort</div><div class="meta-val">' + insp.standort + '</div></div>' +
+      '<div class="meta-box"><div class="meta-lbl">Datum</div><div class="meta-val">' + fmtDate(insp.datum) + '</div></div>' +
+      '<div class="meta-box"><div class="meta-lbl">Gemeldet von</div><div class="meta-val" style="font-size:11pt">' + insp.begeher + '</div></div></div>' +
+      '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
+      '<span class="db ' + dc + '">' + dCap + '</span></div>' +
+      '<div class="mb-b"><div>' + (m.beschreibung || '') + '</div>' +
+      (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
+      (m.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
+      fotosEx + '</div></div>';
+  }
+
+  var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
+    '<title>' + (m.bedenken ? 'Bedenkenanzeige ' : 'Mangel-Meldung ') + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
+    '<style>@page{margin:0;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + css + '</style></head><body>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:-18mm -18mm 14mm;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    body +
+    '<div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. Hübner</div>' +
+    '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+  else { alert('Pop-ups für diese Seite erlauben, um das Dokument zu exportieren.'); }
 }
 
 /* ── UNTERWEISUNGSNACHWEIS PDF ── */
