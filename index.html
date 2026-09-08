@@ -2475,24 +2475,41 @@ function importBackup(text) {
       return;
     }
 
-    // Voll-Backup (version 2): alle Daten ersetzen
-    if (!confirm('Alle aktuellen App-Daten werden durch das Backup ersetzt. Fortfahren?')) return;
+    // Voll-Backup (version 2): fehlende Einträge ergänzen, vorhandene Daten bleiben erhalten
+    if (!confirm('Fehlende Einträge aus dem Backup vom ' + fmtDate(data.exportDatum) + ' werden ergänzt. Vorhandene Daten bleiben erhalten. Fortfahren?')) return;
     if (data.categories)    S.categories    = data.categories;
-    if (data.inspections)   S.inspections   = data.inspections;
-    if (data.unterweisungen)S.unterweisungen= data.unterweisungen;
-    if (data.mitarbeiter)   S.mitarbeiter   = data.mitarbeiter;
-    if (data.anlagen)       S.anlagen       = data.anlagen;
-    if (data.vertraege)     S.vertraege     = data.vertraege;
-    if (data.kontakte)      S.kontakte      = data.kontakte;
-    if (data.aufgaben)      S.aufgaben      = data.aufgaben;
+    var addedInsp = mergeById(S.inspections, data.inspections);
+    var addedUw   = mergeById(S.unterweisungen, data.unterweisungen);
+    var addedMa   = mergeById(S.mitarbeiter, data.mitarbeiter);
+    var addedAnl  = mergeById(S.anlagen, data.anlagen);
+    var addedVt   = mergeById(S.vertraege, data.vertraege);
+    var addedKt   = mergeById(S.kontakte, data.kontakte);
+    var addedAg   = mergeById(S.aufgaben, data.aufgaben);
     if (data.intervalle)    S.intervalle    = data.intervalle;
     if (data.defaultBegeher)S.defaultBegeher= data.defaultBegeher;
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
     if (data.firmierung)    S.firmierung    = data.firmierung;
     save();
-    alert('Voll-Backup vom ' + fmtDate(data.exportDatum) + ' erfolgreich wiederhergestellt.');
+    var addedGesamt = addedInsp + addedUw + addedMa + addedAnl + addedVt + addedKt + addedAg;
+    alert('Voll-Backup vom ' + fmtDate(data.exportDatum) + ' zusammengeführt: ' + addedGesamt + ' neue Einträge übernommen, vorhandene Daten unverändert.');
     nav('home');
   } catch(e) { alert('Fehler beim Lesen der Backup-Datei: ' + e.message); }
+}
+
+// Führt Einträge aus source anhand ihrer id in target zusammen, ohne Vorhandenes zu überschreiben.
+function mergeById(target, source) {
+  if (!Array.isArray(target) || !Array.isArray(source)) return 0;
+  var added = 0;
+  for (var i = 0; i < source.length; i++) {
+    var item = source[i];
+    if (!item || !item.id) continue;
+    var exists = false;
+    for (var j = 0; j < target.length; j++) {
+      if (target[j].id === item.id) { exists = true; break; }
+    }
+    if (!exists) { target.push(item); added++; }
+  }
+  return added;
 }
 
 function importKontakteCSV(rows) {
@@ -3485,8 +3502,10 @@ document.addEventListener('click', function(e) {
     mSave.bedenken = bedenkenCb ? bedenkenCb.checked : false;
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
     S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
+    var wasSchnellmeldungSave = S.currentInspection.schnellmeldung;
     saveInsp();
-    nav(S.currentInspection.schnellmeldung ? 'schnellmangel-ergebnis' : 'inspection'); return;
+    if (wasSchnellmeldungSave) backupBegehungen();
+    nav(wasSchnellmeldungSave ? 'schnellmangel-ergebnis' : 'inspection'); return;
   }
 
   if (a.action === 'set-dring') {
