@@ -1298,7 +1298,7 @@ function vSummary() {
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
-  var bodyGF = encodeURIComponent('Guten Tag,\n\nanbei das Begehungsprotokoll für den Standort ' + insp.standort + ' vom ' + fmtDate(insp.datum) + '.\n\nErgebnis: ' + c.offen + ' Mängel offen, davon ' + c.kritisch + ' kritisch.\n\nDas vollständige Protokoll als PDF bitte hier anhängen.\n\n' + insp.begeher);
+  var bodyGF = encodeURIComponent('Hallo,\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Das vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße\n' + insp.begeher);
   var mailtoHrefGF = 'mailto:' + (S.defaultEmail || '') + '?subject=' + subjectGF + '&body=' + bodyGF;
 
   var centerleiterKontaktSum = null;
@@ -1309,7 +1309,7 @@ function vSummary() {
   var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
   var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
   var subjectCL = encodeURIComponent('Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik');
-  var bodyCL = encodeURIComponent('Guten Tag' + (centerleiterNameSum ? ' ' + centerleiterNameSum : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurden folgende offene Mängel festgestellt:\n\n' + (clListeText || 'Keine offenen Mängel.\n') + 'Bitte an den zuständigen Techniker weiterleiten und die Behebung veranlassen.\n\nDas vollständige Protokoll als PDF bitte hier anhängen.\n\n' + insp.begeher);
+  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße\n' + insp.begeher);
   var mailtoHrefCL = 'mailto:' + centerleiterMailSum + '?subject=' + subjectCL + '&body=' + bodyCL;
   var clRecipientHint = centerleiterMailSum
     ? 'Empfänger: ' + centerleiterMailSum + ' (Centerleiter ' + insp.standort + ')'
