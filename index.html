@@ -606,7 +606,7 @@ function lastInspForStandort(standort) {
 function centerleiterEmailFor(standort) {
   for (var i = 0; i < S.kontakte.length; i++) {
     var k = S.kontakte[i];
-    if (k.standort === standort && k.rolle === 'Centerleiter' && k.email) return k.email;
+    if (k.standort === standort && /^centerleit/i.test((k.rolle || '').trim()) && k.email) return k.email;
   }
   return '';
 }
@@ -1305,7 +1305,7 @@ function vSummary() {
   var centerleiterKontaktSum = null;
   for (var cksi = 0; cksi < S.kontakte.length; cksi++) {
     var cks = S.kontakte[cksi];
-    if (cks.standort === insp.standort && cks.rolle === 'Centerleiter' && cks.email) { centerleiterKontaktSum = cks; break; }
+    if (cks.standort === insp.standort && /^centerleit/i.test((cks.rolle || '').trim()) && cks.email) { centerleiterKontaktSum = cks; break; }
   }
   var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
   var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
