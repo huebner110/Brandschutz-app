@@ -1310,7 +1310,7 @@ function vSummary() {
   var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
   var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
   var subjectCL = encodeURIComponent('Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik');
-  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße\n' + insp.begeher);
+  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße');
   var mailtoHrefCL = 'mailto:' + centerleiterMailSum + '?subject=' + subjectCL + '&body=' + bodyCL;
   var clRecipientHint = centerleiterMailSum
     ? 'Empfänger: ' + centerleiterMailSum + ' (Centerleiter ' + insp.standort + ')'
