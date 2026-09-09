@@ -3913,7 +3913,7 @@ function doExport() {
           }
           checkFotosHtml += '</div>';
         }
-        rows += '<tr><td>' + item.name + '</td>' + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
+        rows += '<tr' + (checkFotosHtml ? ' class="has-photos"' : '') + '><td>' + item.name + '</td>' + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
       }
     }
     tableRows += '<table><thead><tr><th style="width:44%">' + cat.name + '</th><th style="width:12%">Stockwerk</th><th style="width:13%">Status</th><th>Bemerkung</th></tr></thead><tbody>' + rows + '</tbody></table>';
@@ -3982,7 +3982,7 @@ function doExport() {
       var dCap = bm.dringlichkeit.charAt(0).toUpperCase() + bm.dringlichkeit.slice(1);
       var bmFotos = '';
       if (bm.fotos && bm.fotos.length) {
-        bmFotos = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">';
+        bmFotos = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;">';
         for (var bpf = 0; bpf < bm.fotos.length; bpf++) {
           bmFotos += '<img src="' + bm.fotos[bpf] + '" style="width:110px;height:80px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;">';
         }
@@ -4000,7 +4000,7 @@ function doExport() {
           : 'Frist: ' + fmtDate(bm.frist) + ' (noch ' + fristDays + ' Tag' + (fristDays !== 1 ? 'e' : '') + ')';
         fristHtml = '<br><span style="font-size:8.5pt;font-weight:700;color:' + fristColor + '">' + fristLabel + '</span>';
       }
-      bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE;page-break-inside:avoid;break-inside:avoid"><strong>' + bm.checkName + '</strong> ' +
+      bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE"><strong>' + bm.checkName + '</strong> ' +
         '<span style="background:#FDEDEC;color:#C0392B;padding:1px 7px;border-radius:10px;font-size:8pt;font-weight:700">' + dCap + '</span>' +
         (bm.beschreibung ? '<br><span style="font-size:9pt">' + bm.beschreibung + '</span>' : '') +
         fristHtml +
@@ -4036,12 +4036,12 @@ function doExport() {
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
     '<title>Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
     '<style>' +
-    '@page{margin:0;size:A4;}' +
+    '@page{margin:18mm 18mm 14mm;size:A4;}' +
     'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
-    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
+    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:0 0 5mm;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:11pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
-    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:2px 0 0;border-top:0.5px solid #D5DBDB;position:fixed;left:18mm;right:18mm;bottom:1mm;background:#fff;}' +
     '@media print{.no-print{display:none!important;}}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #ed8b00;padding-bottom:10px;margin-bottom:14px;}' +
     '.company{font-size:8pt;color:#717D7E;margin-top:2px;}' +
@@ -4057,7 +4057,7 @@ function doExport() {
     'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:10px;}' +
     'thead th{background:#1a1a1a;color:#fff;padding:5px 7px;text-align:left;}' +
     'td{padding:4px 7px;border-bottom:0.5px solid #EAECEE;vertical-align:top;}' +
-    'tr{page-break-inside:avoid;break-inside:avoid;}' +
+    'tr.has-photos{page-break-inside:avoid;break-inside:avoid;}' +
     'tr:nth-child(even){background:#F7F9F9;}' +
     '.s-ok{color:#27AE60;font-weight:700;}.s-mn{color:#C0392B;font-weight:700;}.s-na{color:#808B96;}' +
     '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;}' +
@@ -4077,7 +4077,7 @@ function doExport() {
     '.bedenken-text{font-size:9pt;line-height:1.6;}' +
     'hr.page-break{page-break-after:always;border:none;}' +
     '</style></head><body>' +
-    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:-18mm -18mm 14mm;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     '<div class="top">' +
     '<div><h1>Begehungsprotokoll Brandschutz</h1>' +
     '<div class="company">' + S.firmierung + ' &middot; Brandschutzbeauftragter</div></div>' +
@@ -4117,7 +4117,7 @@ function doExportSchnellmangel() {
     fotosEx += '</div>';
   }
 
-  var css = 'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
+  var css = 'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:0 0 5mm;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:11pt;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '@media print{.no-print{display:none!important;}}' +
@@ -4135,7 +4135,7 @@ function doExportSchnellmangel() {
     '.dg{background:#E8F8F0;color:#27AE60;}.dm{background:#FEF9E7;color:#D68910;}.dc{background:#FDEDEC;color:#C0392B;}' +
     '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;}' +
     '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;page-break-inside:avoid;break-inside:avoid;}' +
-    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:2px 0 0;border-top:0.5px solid #D5DBDB;position:fixed;left:18mm;right:18mm;bottom:1mm;background:#fff;}' +
     '.bedenken-box{border:2px solid #C0392B;border-radius:6px;padding:12px 14px;margin-bottom:10px;background:#FDEDEC;}' +
     '.bedenken-title{font-size:11pt;font-weight:700;color:#C0392B;margin-bottom:6px;}' +
     '.bedenken-text{font-size:9pt;line-height:1.6;}';
@@ -4196,8 +4196,8 @@ function doExportSchnellmangel() {
 
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
     '<title>' + (m.bedenken ? 'Bedenkenanzeige ' : 'Mangel-Meldung ') + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
-    '<style>@page{margin:0;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + css + '</style></head><body>' +
-    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:-18mm -18mm 14mm;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    '<style>@page{margin:18mm 18mm 14mm;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + css + '</style></head><body>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     body +
     '<div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. Hübner</div>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
@@ -4230,15 +4230,15 @@ function doExportUW() {
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
     '<title>Unterweisungsnachweis ' + uw.standort + ' ' + fmtDate(uw.datum) + '</title>' +
     '<style>' +
-    '@page{margin:0;size:A4;}' +
+    '@page{margin:18mm 18mm 14mm;size:A4;}' +
     'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
-    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:18mm 18mm 14mm;box-sizing:border-box;margin:0;}' +
+    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:0 0 5mm;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:10.5pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #ed8b00;padding-bottom:10px;margin-bottom:14px;}' +
     '.company{font-size:8pt;color:#717D7E;margin-top:2px;}' +
     '.logo-pdf{height:32px;display:block;}' +
-    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
+    '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:2px 0 0;border-top:0.5px solid #D5DBDB;position:fixed;left:18mm;right:18mm;bottom:1mm;background:#fff;}' +
     '@media print{.no-print{display:none!important;}}' +
     '.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}' +
     '.meta-box{background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:7px 10px;}' +
@@ -4248,7 +4248,7 @@ function doExportUW() {
     'thead th{background:#1a1a1a;color:#fff;padding:6px 8px;text-align:left;}' +
     '.legal{font-size:8pt;color:#717D7E;margin-top:14px;line-height:1.6;padding:8px 10px;background:#F7F9F9;border-radius:4px;}' +
     '</style></head><body>' +
-    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:-18mm -18mm 14mm;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     '<div class="top">' +
     '<div><h1>Unterweisungsnachweis Brandschutz</h1>' +
     '<div class="company">' + S.firmierung + ' &middot; Brandschutzbeauftragter &middot; Grundlage: DGUV V2</div></div>' +
