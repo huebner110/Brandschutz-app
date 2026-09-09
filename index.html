@@ -1298,8 +1298,9 @@ function vSummary() {
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
-  var bodyGF = encodeURIComponent('Hallo,\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Das vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße\n' + insp.begeher);
-  var mailtoHrefGF = 'mailto:' + (S.defaultEmail || '') + '?subject=' + subjectGF + '&body=' + bodyGF;
+  var bodyGF = encodeURIComponent('Hallo,\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Das vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße');
+  var gfCcListe = 'Carsten.Boerner@bodyandsoul.de,Katharina.Schickaneder@bodyandsoul.de,technik@bodyandsoul.de';
+  var mailtoHrefGF = 'mailto:Michael.Pribil@bodyandsoul.de?cc=' + encodeURIComponent(gfCcListe) + '&subject=' + subjectGF + '&body=' + bodyGF;
 
   var centerleiterKontaktSum = null;
   for (var cksi = 0; cksi < S.kontakte.length; cksi++) {
