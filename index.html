@@ -1298,12 +1298,18 @@ function vSummary() {
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
-  var bodyGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + '\nDatum: ' + fmtDate(insp.datum) + '\nBegeher: ' + insp.begeher + '\n\nMängel: ' + c.offen + ' offen, davon ' + c.kritisch + ' kritisch\n\nDas vollständige Protokoll als PDF bitte hier anhängen.\n\n' + insp.begeher);
+  var bodyGF = encodeURIComponent('Hallo,\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Das vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße\n' + insp.begeher);
   var mailtoHrefGF = 'mailto:' + (S.defaultEmail || '') + '?subject=' + subjectGF + '&body=' + bodyGF;
 
-  var centerleiterMailSum = centerleiterEmailFor(insp.standort);
+  var centerleiterKontaktSum = null;
+  for (var cksi = 0; cksi < S.kontakte.length; cksi++) {
+    var cks = S.kontakte[cksi];
+    if (cks.standort === insp.standort && cks.rolle === 'Centerleiter' && cks.email) { centerleiterKontaktSum = cks; break; }
+  }
+  var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
+  var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
   var subjectCL = encodeURIComponent('Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik');
-  var bodyCL = encodeURIComponent('Bei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurden folgende offene Mängel festgestellt:\n\n' + (clListeText || 'Keine offenen Mängel.\n') + 'Bitte an den zuständigen Techniker weiterleiten und Behebung veranlassen.\n\nDas vollständige Protokoll als PDF bitte hier anhängen.\n\n' + insp.begeher);
+  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße\n' + insp.begeher);
   var mailtoHrefCL = 'mailto:' + centerleiterMailSum + '?subject=' + subjectCL + '&body=' + bodyCL;
   var clRecipientHint = centerleiterMailSum
     ? 'Empfänger: ' + centerleiterMailSum + ' (Centerleiter ' + insp.standort + ')'
@@ -3993,7 +3999,7 @@ function doExport() {
           : 'Frist: ' + fmtDate(bm.frist) + ' (noch ' + fristDays + ' Tag' + (fristDays !== 1 ? 'e' : '') + ')';
         fristHtml = '<br><span style="font-size:8.5pt;font-weight:700;color:' + fristColor + '">' + fristLabel + '</span>';
       }
-      bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE"><strong>' + bm.checkName + '</strong> ' +
+      bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE;page-break-inside:avoid;break-inside:avoid"><strong>' + bm.checkName + '</strong> ' +
         '<span style="background:#FDEDEC;color:#C0392B;padding:1px 7px;border-radius:10px;font-size:8pt;font-weight:700">' + dCap + '</span>' +
         (bm.beschreibung ? '<br><span style="font-size:9pt">' + bm.beschreibung + '</span>' : '') +
         fristHtml +
@@ -4050,15 +4056,16 @@ function doExport() {
     'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:10px;}' +
     'thead th{background:#1a1a1a;color:#fff;padding:5px 7px;text-align:left;}' +
     'td{padding:4px 7px;border-bottom:0.5px solid #EAECEE;vertical-align:top;}' +
+    'tr{page-break-inside:avoid;break-inside:avoid;}' +
     'tr:nth-child(even){background:#F7F9F9;}' +
     '.s-ok{color:#27AE60;font-weight:700;}.s-mn{color:#C0392B;font-weight:700;}.s-na{color:#808B96;}' +
-    '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;}' +
+    '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;}' +
     '.mb-h{display:flex;justify-content:space-between;align-items:center;background:#F7F9F9;padding:7px 10px;}' +
     '.mb-b{padding:7px 10px;}' +
     '.db{display:inline-block;padding:2px 8px;border-radius:10px;font-size:7.5pt;font-weight:700;}' +
     '.dg{background:#E8F8F0;color:#27AE60;}.dm{background:#FEF9E7;color:#D68910;}.dc{background:#FDEDEC;color:#C0392B;}' +
-    '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}' +
-    '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;}' +
+    '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;}' +
+    '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;page-break-inside:avoid;break-inside:avoid;}' +
     '.sig{margin-top:30px;display:flex;justify-content:flex-end;}' +
     '.sig-box{width:220px;text-align:center;}' +
     '.sig-line{border-top:1px solid #1a1a1a;margin:8px 0 4px;}' +
@@ -4120,13 +4127,13 @@ function doExportSchnellmangel() {
     '.meta-box{background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:7px 10px;}' +
     '.meta-lbl{font-size:7pt;color:#717D7E;text-transform:uppercase;letter-spacing:0.4px;}' +
     '.meta-val{font-size:12pt;font-weight:700;margin-top:1px;}' +
-    '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;}' +
+    '.mb{border:0.5px solid #D5DBDB;border-radius:5px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;}' +
     '.mb-h{display:flex;justify-content:space-between;align-items:center;background:#F7F9F9;padding:7px 10px;}' +
     '.mb-b{padding:7px 10px;}' +
     '.db{display:inline-block;padding:2px 8px;border-radius:10px;font-size:7.5pt;font-weight:700;}' +
     '.dg{background:#E8F8F0;color:#27AE60;}.dm{background:#FEF9E7;color:#D68910;}.dc{background:#FDEDEC;color:#C0392B;}' +
-    '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}' +
-    '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;}' +
+    '.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;}' +
+    '.photos img{width:100px;height:75px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;page-break-inside:avoid;break-inside:avoid;}' +
     '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8mm 0 6mm;border-top:0.5px solid #D5DBDB;margin-top:16px;}' +
     '.bedenken-box{border:2px solid #C0392B;border-radius:6px;padding:12px 14px;margin-bottom:10px;background:#FDEDEC;}' +
     '.bedenken-title{font-size:11pt;font-weight:700;color:#C0392B;margin-bottom:6px;}' +
