@@ -228,7 +228,7 @@ var DEFAULT_CATEGORIES = [
     { id:'bst2', name:'T30 Treppenhaus – frei, nicht verkeilt' },
     { id:'bst3', name:'T30 Technikraum – Schließer funktionstüchtig' },
     { id:'bst4', name:'T90 Serverraum / Lager – intakt' },
-    { id:'bst5', name:'Türdichtungen intakt (DIN 18095)' }
+    { id:'bst5', name:'Türdichtungen intakt (Herstellerangabe)' }
   ]},
   { id:'fw', name:'Fluchtwege', items:[
     { id:'fw1', name:'Fluchtweg EG frei und begehbar (ASR A2.3 2022)' },
@@ -273,7 +273,7 @@ var PFLICHT_CAT = { id:'pfl', name:'Gesetzliche Prüffristen', items:[
   { id:'pfl1', name:'BMA – Wartung und Inspektion (DIN 14675:2021-04, jährlich)' },
   { id:'pfl2', name:'Feuerlöscher – Sachkundigenprüfung (DIN 14406-4, max. 2 Jahre)' },
   { id:'pfl3', name:'Notbeleuchtung – Fachkraftprüfung (DIN EN 50172, jährlich)' },
-  { id:'pfl4', name:'Brandschutztüren – Sachkundigenprüfung (DIN 18095, jährlich)' },
+  { id:'pfl4', name:'Brandschutztüren / Feststellanlagen – Wartung durch Fachkraft (Herstellerangabe, DIN 14677-1:2018-08, jährlich)' },
   { id:'pfl5', name:'Elektroanlagen ortsfest (DGUV V3, alle 4 Jahre)' },
   { id:'pfl6', name:'Elektroanlagen ortsveränderlich (DGUV V3, jährlich)' },
   { id:'pfl7', name:'Brandschutzunterweisung Mitarbeiter (DGUV V2, jährlich)' },
@@ -1626,7 +1626,7 @@ function vHilfe() {
 
     '<div class="section-header">Rechtliche Grundlagen</div>' +
     hSection('📚', 'Normen und Vorschriften',
-      'Die App berücksichtigt: DGUV V2 (Unterweisungen), DGUV I 205-023 (Brandschutzbegehungen), ASR A2.3:2022 (Fluchtwege), ASR A1.3:2013 (Sicherheitskennzeichnung), DIN 14096:2014-05 (Brandschutzordnung), DIN 14675:2021-04 (BMA), DIN 18095 (Brandschutztüren), DIN EN 50172 (Notbeleuchtung), DGUV V3 (Elektroanlagen), GefStoffV / TRGS 510 (Gefahrstoffe).') +
+      'Die App berücksichtigt: DGUV V2 (Unterweisungen), DGUV I 205-023 (Brandschutzbegehungen), ASR A2.3:2022 (Fluchtwege), ASR A1.3:2013 (Sicherheitskennzeichnung), DIN 14096:2014-05 (Brandschutzordnung), DIN 14675:2021-04 (BMA), DIN 14677-1:2018-08 (Feststellanlagen an Brand- und Rauchschutztüren), DIN EN 50172 (Notbeleuchtung), DGUV V3 (Elektroanlagen), GefStoffV / TRGS 510 (Gefahrstoffe).') +
 
     '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div>' +
     '</div>';
