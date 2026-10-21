@@ -219,7 +219,7 @@ window.onerror = function(msg, src, line) {
 };
 
 var LOCATIONS = ['Brunnthal','Englischer Garten','Erding','Hirschgarten','München Mitte','München Nord','Sendling','Theresienhöhe','Trudering','WERK12'];
-var NETLIFY_URL = 'https://peppy-alpaca-9e0a9e.netlify.app';
+var APP_URL = 'https://huebner110.github.io/Brandschutz-app/';
 var FLOOR_OPTIONS = ['EG','1.OG','2.OG','3.OG','DG','UG','2.UG'];
 
 var DEFAULT_CATEGORIES = [
@@ -228,7 +228,7 @@ var DEFAULT_CATEGORIES = [
     { id:'bst2', name:'T30 Treppenhaus – frei, nicht verkeilt' },
     { id:'bst3', name:'T30 Technikraum – Schließer funktionstüchtig' },
     { id:'bst4', name:'T90 Serverraum / Lager – intakt' },
-    { id:'bst5', name:'Türdichtungen intakt (DIN 18095)' }
+    { id:'bst5', name:'Türdichtungen intakt (Herstellerangabe)' }
   ]},
   { id:'fw', name:'Fluchtwege', items:[
     { id:'fw1', name:'Fluchtweg EG frei und begehbar (ASR A2.3 2022)' },
@@ -273,7 +273,7 @@ var PFLICHT_CAT = { id:'pfl', name:'Gesetzliche Prüffristen', items:[
   { id:'pfl1', name:'BMA – Wartung und Inspektion (DIN 14675:2021-04, jährlich)' },
   { id:'pfl2', name:'Feuerlöscher – Sachkundigenprüfung (DIN 14406-4, max. 2 Jahre)' },
   { id:'pfl3', name:'Notbeleuchtung – Fachkraftprüfung (DIN EN 50172, jährlich)' },
-  { id:'pfl4', name:'Brandschutztüren – Sachkundigenprüfung (DIN 18095, jährlich)' },
+  { id:'pfl4', name:'Brandschutztüren / Feststellanlagen – Wartung durch Fachkraft (Herstellerangabe, DIN 14677-1:2018-08, jährlich)' },
   { id:'pfl5', name:'Elektroanlagen ortsfest (DGUV V3, alle 4 Jahre)' },
   { id:'pfl6', name:'Elektroanlagen ortsveränderlich (DGUV V3, jährlich)' },
   { id:'pfl7', name:'Brandschutzunterweisung Mitarbeiter (DGUV V2, jährlich)' },
@@ -312,6 +312,9 @@ var S = {
   defaultEmail: '',
   firmierung: 'Body and Soul Fitness GmbH',
   adminPin: '',
+  gfName: '',
+  gfEmail: '',
+  gfCc: '',
   lastStandort: 'Sendling',
   collapsedCats: {},
   intervalle: {},
@@ -467,6 +470,9 @@ function save() {
     localStorage.setItem('bs2_email', S.defaultEmail);
     localStorage.setItem('bs2_firmierung', S.firmierung);
     localStorage.setItem('bs2_pin', S.adminPin);
+    localStorage.setItem('bs2_gf_name', S.gfName);
+    localStorage.setItem('bs2_gf_email', S.gfEmail);
+    localStorage.setItem('bs2_gf_cc', S.gfCc);
     localStorage.setItem('bs2_intervalle', JSON.stringify(S.intervalle));
     localStorage.setItem('bs2_ma', JSON.stringify(S.mitarbeiter));
     localStorage.setItem('bs2_uw', JSON.stringify(S.unterweisungen));
@@ -495,6 +501,9 @@ function load() {
     S.defaultEmail = localStorage.getItem('bs2_email') || '';
     S.firmierung = localStorage.getItem('bs2_firmierung') || 'Body and Soul Fitness GmbH';
     S.adminPin = localStorage.getItem('bs2_pin') || '';
+    S.gfName = localStorage.getItem('bs2_gf_name') || '';
+    S.gfEmail = localStorage.getItem('bs2_gf_email') || '';
+    S.gfCc = localStorage.getItem('bs2_gf_cc') || '';
     var iv = localStorage.getItem('bs2_intervalle');
     var ma = localStorage.getItem('bs2_ma');
     S.mitarbeiter = ma ? JSON.parse(ma) : {};
@@ -976,7 +985,7 @@ function vQrCodes() {
   var cardsHtml = '';
   for (var li = 0; li < LOCATIONS.length; li++) {
     var loc = LOCATIONS[li];
-    var url = NETLIFY_URL + '?loc=' + encodeURIComponent(loc);
+    var url = APP_URL + '?loc=' + encodeURIComponent(loc);
     var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' + encodeURIComponent(url);
     cardsHtml += '<div class="qr-card">' +
       '<img src="' + qrUrl + '" alt="QR ' + loc + '" loading="lazy">' +
@@ -1298,9 +1307,13 @@ function vSummary() {
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
-  var bodyGF = encodeURIComponent('Hallo,\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Das vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße');
-  var gfCcListe = '[entfernt],[entfernt],[entfernt]';
-  var mailtoHrefGF = 'mailto:[entfernt]?cc=' + encodeURIComponent(gfCcListe) + '&subject=' + subjectGF + '&body=' + bodyGF;
+  var gfVorname = (S.gfName || '').trim().split(' ')[0];
+  var bodyGF = encodeURIComponent('Hallo' + (gfVorname ? ' ' + gfVorname : '') + ',\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Die Mängel habe ich bereits an die Centerleitung geschickt, damit die Behebung in die Wege geleitet wird.\n\nDas vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße');
+  var gfCcListe = (S.gfCc || '').replace(/[;\s]+/g, ',').replace(/^,+|,+$/g, '');
+  var mailtoHrefGF = 'mailto:' + (S.gfEmail || '') + '?' + (gfCcListe ? 'cc=' + encodeURIComponent(gfCcListe) + '&' : '') + 'subject=' + subjectGF + '&body=' + bodyGF;
+  var gfRecipientHint = S.gfEmail
+    ? 'Empfänger: ' + S.gfEmail + (gfCcListe ? ' (Kopie: ' + gfCcListe.split(',').join(', ') + ')' : '')
+    : 'Kein Empfänger für die Geschäftsleitung hinterlegt (unter Einstellungen). Empfänger bitte manuell eintragen.';
 
   var centerleiterKontaktSum = null;
   for (var cksi = 0; cksi < S.kontakte.length; cksi++) {
@@ -1351,6 +1364,7 @@ function vSummary() {
     '<button class="btn-outline" style="width:100%" data-action="email-choice">Per E-Mail versenden</button>' +
     '<div id="email-choice-panel" class="card" style="display:none;margin-top:10px">' +
     '<a href="' + mailtoHrefGF + '" style="text-decoration:none"><button class="btn-outline" style="width:100%;margin-bottom:8px">An Geschäftsleitung</button></a>' +
+    '<div style="font-size:11px;color:' + (S.gfEmail ? 'var(--text-light)' : 'var(--warn)') + ';margin:-2px 0 10px">' + gfRecipientHint + '</div>' +
     '<a href="' + mailtoHrefCL + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">An Centerleitung</button></a>' +
     '<div style="font-size:11px;color:' + (centerleiterMailSum ? 'var(--text-light)' : 'var(--warn)') + ';margin-top:6px">' + clRecipientHint + '</div>' +
     '<div style="font-size:11px;color:var(--text-light);margin-top:6px">PDF vorher exportieren, ein automatischer Anhang an die E-Mail ist technisch nicht möglich.</div>' +
@@ -1479,6 +1493,12 @@ function vSettings() {
     '<input type="text" class="form-input" id="s-firmierung" value="' + S.firmierung + '" placeholder="Firmenname"></div>' +
     '<div class="form-group"><label class="form-label">E-Mail-Empfänger (optional)</label>' +
     '<input type="email" class="form-input" id="s-email" value="' + S.defaultEmail + '" placeholder="name@example.de"></div>' +
+    '<div class="form-group"><label class="form-label">Geschäftsleitung: Name (für die Anrede)</label>' +
+    '<input type="text" class="form-input" id="s-gf-name" value="' + S.gfName + '" placeholder="Vorname Nachname"></div>' +
+    '<div class="form-group"><label class="form-label">Geschäftsleitung: E-Mail</label>' +
+    '<input type="email" class="form-input" id="s-gf-email" value="' + S.gfEmail + '" placeholder="name@example.de"></div>' +
+    '<div class="form-group"><label class="form-label">Geschäftsleitung: Kopie an (mehrere mit Komma trennen)</label>' +
+    '<input type="text" class="form-input" id="s-gf-cc" value="' + S.gfCc + '" placeholder="a@example.de, b@example.de"></div>' +
     '<button class="btn-sm-outline" data-action="save-settings">Speichern</button></div>' +
     '<div class="section-header">Begehungsintervall je Standort</div>' +
     '<div class="card">' + intervallHtml + '</div>' +
@@ -1626,7 +1646,7 @@ function vHilfe() {
 
     '<div class="section-header">Rechtliche Grundlagen</div>' +
     hSection('📚', 'Normen und Vorschriften',
-      'Die App berücksichtigt: DGUV V2 (Unterweisungen), DGUV I 205-023 (Brandschutzbegehungen), ASR A2.3:2022 (Fluchtwege), ASR A1.3:2013 (Sicherheitskennzeichnung), DIN 14096:2014-05 (Brandschutzordnung), DIN 14675:2021-04 (BMA), DIN 18095 (Brandschutztüren), DIN EN 50172 (Notbeleuchtung), DGUV V3 (Elektroanlagen), GefStoffV / TRGS 510 (Gefahrstoffe).') +
+      'Die App berücksichtigt: DGUV V2 (Unterweisungen), DGUV I 205-023 (Brandschutzbegehungen), ASR A2.3:2022 (Fluchtwege), ASR A1.3:2013 (Sicherheitskennzeichnung), DIN 14096:2014-05 (Brandschutzordnung), DIN 14675:2021-04 (BMA), DIN 14677-1:2018-08 (Feststellanlagen an Brand- und Rauchschutztüren), DIN EN 50172 (Notbeleuchtung), DGUV V3 (Elektroanlagen), GefStoffV / TRGS 510 (Gefahrstoffe).') +
 
     '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div>' +
     '</div>';
@@ -2466,7 +2486,10 @@ function exportBackup() {
     intervalle: S.intervalle,
     defaultBegeher: S.defaultBegeher,
     defaultEmail: S.defaultEmail,
-    firmierung: S.firmierung
+    firmierung: S.firmierung,
+    gfName: S.gfName,
+    gfEmail: S.gfEmail,
+    gfCc: S.gfCc
   };
   var json = JSON.stringify(data, null, 2);
   var blob = new Blob([json], { type: 'application/json' });
@@ -2520,6 +2543,9 @@ function importBackup(text) {
     if (data.defaultBegeher)S.defaultBegeher= data.defaultBegeher;
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
     if (data.firmierung)    S.firmierung    = data.firmierung;
+    if (data.gfName)        S.gfName        = data.gfName;
+    if (data.gfEmail)       S.gfEmail       = data.gfEmail;
+    if (data.gfCc)          S.gfCc          = data.gfCc;
     save();
     var addedGesamt = addedInsp + addedUw + addedMa + addedAnl + addedVt + addedKt + addedAg;
     alert('Voll-Backup vom ' + fmtDate(data.exportDatum) + ' zusammengeführt: ' + addedGesamt + ' neue Einträge übernommen, vorhandene Daten unverändert.');
@@ -3645,6 +3671,9 @@ document.addEventListener('click', function(e) {
     if (fv && fv.trim()) S.firmierung = fv.trim();
     var pv = (document.getElementById('s-pin') || {}).value;
     S.adminPin = pv !== undefined ? pv : S.adminPin;
+    S.gfName = ((document.getElementById('s-gf-name') || {}).value || '').trim();
+    S.gfEmail = ((document.getElementById('s-gf-email') || {}).value || '').trim();
+    S.gfCc = ((document.getElementById('s-gf-cc') || {}).value || '').trim();
     save(); nav('home'); return;
   }
 
@@ -3722,6 +3751,7 @@ document.addEventListener('click', function(e) {
       localStorage.removeItem('bs2_cats'); localStorage.removeItem('bs2_insps');
       localStorage.removeItem('bs2_begeher'); localStorage.removeItem('bs2_standort');
       localStorage.removeItem('bs2_email'); localStorage.removeItem('bs2_intervalle');
+      localStorage.removeItem('bs2_gf_name'); localStorage.removeItem('bs2_gf_email'); localStorage.removeItem('bs2_gf_cc');
       load(); nav('home');
     }
     return;
