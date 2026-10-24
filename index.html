@@ -343,7 +343,11 @@ var S = {
   editAufgabeId: null,
   aufgabenFilter: 'alle',
   termineFilter: '90',
-  csvImportTarget: null
+  csvImportTarget: null,
+  // Server-Sicherung (Stufe 1): Adresse und Schlüssel nur auf diesem Gerät, nie im Backup
+  srvUrl: '',
+  srvKey: '',
+  photosLoaded: false
 };
 
 var pendingPostRender = null;
@@ -489,7 +493,10 @@ function save() {
     localStorage.setItem('bs2_vertraege', JSON.stringify(S.vertraege));
     localStorage.setItem('bs2_kontakte', JSON.stringify(S.kontakte));
     localStorage.setItem('bs2_aufgaben', JSON.stringify(S.aufgaben));
+    localStorage.setItem('bs2_srv_url', S.srvUrl);
+    localStorage.setItem('bs2_srv_key', S.srvKey);
   } catch(e) { console.warn('Storage full', e); }
+  scheduleServerBackup();
   // Fotos getrennt und asynchron in IndexedDB sichern (blockiert die UI nicht)
   S.inspections.forEach(function(insp) {
     var pd = extractPhotos(insp);
@@ -527,6 +534,8 @@ function load() {
     var ag = localStorage.getItem('bs2_aufgaben');
     S.aufgaben = ag ? JSON.parse(ag) : clone(AUFGABEN_DEFAULT);
     S.intervalle = iv ? JSON.parse(iv) : {};
+    S.srvUrl = localStorage.getItem('bs2_srv_url') || '';
+    S.srvKey = localStorage.getItem('bs2_srv_key') || '';
     // Migration: Prüffristen-Kategorie ergänzen falls noch nicht vorhanden
     var hasPfl = false;
     for (var pi = 0; pi < S.categories.length; pi++) {
@@ -1521,6 +1530,18 @@ function vSettings() {
     '<span>Prüfkategorien</span>' +
     '<button class="btn-sm-outline" data-action="add-cat">+ Kategorie</button></div>' +
     catsHtml +
+    '<div class="section-header">Server-Sicherung</div>' +
+    '<div class="card" style="margin-bottom:12px">' +
+    '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Die App schickt ihre Daten nach jeder Änderung automatisch an den eigenen Server. Ohne Netz wird später nachgesendet. Adresse und Schlüssel gelten nur für dieses Gerät.</div>' +
+    '<div class="form-group"><label class="form-label">Server-Adresse</label>' +
+    '<input type="url" class="form-input" id="s-srv-url" value="' + S.srvUrl + '" placeholder="https://…" autocapitalize="off" autocorrect="off"></div>' +
+    '<div class="form-group"><label class="form-label">Schlüssel für dieses Gerät</label>' +
+    '<input type="password" class="form-input" id="s-srv-key" value="' + S.srvKey + '" placeholder="vom Server" autocomplete="new-password" autocapitalize="off" autocorrect="off"></div>' +
+    '<div style="font-size:13px;line-height:1.5;margin-bottom:12px">' + srvStatusHtml() + '</div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button class="btn-outline" style="flex:1" data-action="srv-save">Speichern</button>' +
+    '<button class="btn-primary" style="flex:1" data-action="srv-now">Jetzt sichern</button>' +
+    '</div></div>' +
     '<div class="section-header">Export &amp; Datensicherung</div>' +
     '<div class="card" style="margin-bottom:12px">' +
     '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Vollständige Datensicherung aller App-Inhalte als JSON-Datei. Kann auf einem anderen Gerät oder nach einem Neustart wiederhergestellt werden.</div>' +
@@ -1543,6 +1564,10 @@ function vSettings() {
     '<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px">Wartungsverträge</span><button class="btn-sm-outline" data-action="csv-export-vertraege">Exportieren</button></div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px">Ansprechpartner</span><button class="btn-sm-outline" data-action="csv-export-kontakte">Exportieren</button></div>' +
     '</div></div>' +
+    '<div class="section-header">Daten bereinigen</div>' +
+    '<div class="card" style="margin-bottom:12px">' +
+    '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Entfernt doppelte Anlagen, Verträge, Ansprechpartner und Aufgaben (alle Angaben gleich) sowie leere Platzhalter-Anlagen wie „Erding - Feuerlöscher“. Vor dem Löschen wird angezeigt, wie viele es sind.</div>' +
+    '<button class="btn-outline" style="width:100%" data-action="daten-bereinigen">Daten bereinigen</button></div>' +
     '<div style="margin-top:8px;padding-bottom:calc(20px + var(--safe-bottom))">' +
     '<button class="btn-danger" data-action="reset-all">Alle Daten zurücksetzen</button></div></div>';
 }
@@ -2486,8 +2511,8 @@ function importVertraegeCSV(rows) {
   render();
 }
 
-function exportBackup() {
-  var data = {
+function buildBackupData() {
+  return {
     version: 2,
     exportDatum: today(),
     categories: S.categories,
@@ -2506,6 +2531,10 @@ function exportBackup() {
     gfEmail: S.gfEmail,
     gfCc: S.gfCc
   };
+}
+
+function exportBackup() {
+  var data = buildBackupData();
   var json = JSON.stringify(data, null, 2);
   var blob = new Blob([json], { type: 'application/json' });
   var filename = 'Brandschutz_Backup_' + today() + '.json';
@@ -2582,6 +2611,137 @@ function mergeById(target, source) {
     if (!exists) { target.push(item); added++; }
   }
   return added;
+}
+
+/* ── SERVER-SICHERUNG (Stufe 1) ──
+   Schickt das Voll-Backup nach Änderungen automatisch an den eigenen Server.
+   Ohne Netz bleibt es vorgemerkt und wird beim nächsten Online-Gehen nachgeschickt. */
+var srvTimer = null, srvBusy = false, srvAgain = false, srvRetry = null;
+
+function srvConfigured() { return !!(S.srvUrl && S.srvKey); }
+
+function srvHash(str) {
+  // FNV-1a, nur um unveränderte Stände nicht erneut zu senden
+  var h = 0x811c9dc5;
+  for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  return h.toString(16) + '-' + str.length;
+}
+
+function scheduleServerBackup() {
+  if (!srvConfigured() || !S.photosLoaded) return;
+  try { localStorage.setItem('bs2_srv_pending', '1'); } catch(e) {}
+  clearTimeout(srvTimer);
+  srvTimer = setTimeout(function() { serverBackupNow(false); }, 30000);
+}
+
+function serverBackupNow(manual) {
+  clearTimeout(srvTimer);
+  if (!srvConfigured()) { if (manual) alert('Bitte zuerst Server-Adresse und Schlüssel eintragen.'); return Promise.resolve(); }
+  if (!S.photosLoaded) { srvTimer = setTimeout(function() { serverBackupNow(manual); }, 3000); return Promise.resolve(); }
+  if (srvBusy) { srvAgain = true; return Promise.resolve(); }
+  var json = JSON.stringify(buildBackupData());
+  var hash = srvHash(json);
+  if (!manual && hash === localStorage.getItem('bs2_srv_hash')) {
+    try { localStorage.removeItem('bs2_srv_pending'); } catch(e) {}
+    return Promise.resolve();
+  }
+  srvBusy = true;
+  return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/backup', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+    body: json
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(res) {
+      if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
+      try {
+        localStorage.setItem('bs2_srv_hash', hash);
+        localStorage.setItem('bs2_srv_last', new Date().toISOString());
+        localStorage.removeItem('bs2_srv_pending');
+        localStorage.removeItem('bs2_srv_error');
+      } catch(e) {}
+      if (manual) alert('Gesichert auf dem Server (Gerät: ' + res.geraet + ').');
+    });
+  }).catch(function(err) {
+    try {
+      localStorage.setItem('bs2_srv_pending', '1');
+      localStorage.setItem('bs2_srv_error', new Date().toISOString() + '|' + (err && err.message || 'Fehler'));
+    } catch(e) {}
+    if (manual) alert('Sicherung fehlgeschlagen: ' + (err && err.message || 'keine Verbindung') + '. Die App versucht es später automatisch erneut.');
+    clearTimeout(srvRetry);
+    srvRetry = setTimeout(function() { serverBackupNow(false); }, 5 * 60000);
+  }).then(function() {
+    srvBusy = false;
+    if (S.view === 'settings') render();
+    if (srvAgain) { srvAgain = false; scheduleServerBackup(); }
+  });
+}
+
+function srvStatusHtml() {
+  if (!srvConfigured()) return 'Noch nicht eingerichtet.';
+  var last = localStorage.getItem('bs2_srv_last');
+  var err = localStorage.getItem('bs2_srv_error');
+  var pending = localStorage.getItem('bs2_srv_pending');
+  var fmt = function(iso) { var d = new Date(iso); return fmtDate(iso.slice(0, 10)) + ', ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ' Uhr'; };
+  var parts = [];
+  parts.push(last ? 'Zuletzt gesichert: ' + fmt(last) : 'Noch keine Sicherung.');
+  if (srvBusy) parts.push('Sicherung läuft …');
+  else if (pending && err) parts.push('<span style="color:var(--crit)">Ausstehend, letzter Versuch fehlgeschlagen: ' + err.split('|').slice(1).join('|') + '</span>');
+  else if (pending) parts.push('Änderungen werden in Kürze gesendet.');
+  return parts.join('<br>');
+}
+
+/* ── DATEN BEREINIGEN ──
+   Entfernt doppelte Anlagen, Verträge, Kontakte und Aufgaben (alle Felder außer der ID gleich)
+   und leere Platzhalter-Anlagen wie "Erding - Feuerlöscher" ohne weitere Angaben. */
+function isAnlagePlatzhalter(a) {
+  return a && a.bezeichnung === (a.standort + ' - ' + a.typ) &&
+    !a.letztePruefung && !a.intervallMonate && !a.pruefFirma && !a.bemerkung;
+}
+
+function duplikatIds(list) {
+  var seen = {}, ids = [];
+  (list || []).forEach(function(x) {
+    if (!x) return;
+    var copy = {};
+    Object.keys(x).sort().forEach(function(k) { if (k !== 'id') copy[k] = x[k]; });
+    var key = JSON.stringify(copy);
+    if (seen[key]) ids.push(x.id); else seen[key] = true;
+  });
+  return ids;
+}
+
+function bereinigenPlan() {
+  var platz = S.anlagen.filter(isAnlagePlatzhalter).map(function(a) { return a.id; });
+  var rest = S.anlagen.filter(function(a) { return platz.indexOf(a.id) === -1; });
+  return {
+    platzhalter: platz,
+    anlagen: duplikatIds(rest),
+    vertraege: duplikatIds(S.vertraege),
+    kontakte: duplikatIds(S.kontakte),
+    aufgaben: duplikatIds(S.aufgaben)
+  };
+}
+
+function datenBereinigen() {
+  var p = bereinigenPlan();
+  var summe = p.platzhalter.length + p.anlagen.length + p.vertraege.length + p.kontakte.length + p.aufgaben.length;
+  if (!summe) { alert('Keine doppelten Einträge und keine leeren Platzhalter gefunden.'); return; }
+  var text = 'Folgendes wird entfernt:\n\n' +
+    (p.platzhalter.length ? '• ' + p.platzhalter.length + ' leere Platzhalter-Anlagen\n' : '') +
+    (p.anlagen.length ? '• ' + p.anlagen.length + ' doppelte Anlagen\n' : '') +
+    (p.vertraege.length ? '• ' + p.vertraege.length + ' doppelte Verträge\n' : '') +
+    (p.kontakte.length ? '• ' + p.kontakte.length + ' doppelte Ansprechpartner\n' : '') +
+    (p.aufgaben.length ? '• ' + p.aufgaben.length + ' doppelte Aufgaben\n' : '') +
+    '\nVon doppelten Einträgen bleibt jeweils einer erhalten. Fortfahren?';
+  if (!confirm(text)) return;
+  var weg = function(list, ids) { return list.filter(function(x) { return !x || ids.indexOf(x.id) === -1; }); };
+  S.anlagen = weg(S.anlagen, p.platzhalter.concat(p.anlagen));
+  S.vertraege = weg(S.vertraege, p.vertraege);
+  S.kontakte = weg(S.kontakte, p.kontakte);
+  S.aufgaben = weg(S.aufgaben, p.aufgaben);
+  save();
+  alert(summe + ' Einträge entfernt. Jetzt: ' + S.anlagen.length + ' Anlagen, ' + S.vertraege.length + ' Verträge, ' + S.kontakte.length + ' Ansprechpartner.');
+  render();
 }
 
 function importKontakteCSV(rows) {
@@ -2810,6 +2970,10 @@ function importXLSX(file) {
           var bez = r['Bezeichnung'] || r['bezeichnung'] || '';
           var standort = r['Standort'] || r['standort'] || S.technikStandort;
           if (!bez) { skipped++; continue; }
+          // Leere Vorlagenzeilen wie "Erding - Feuerlöscher" nicht als Anlage übernehmen
+          if (isAnlagePlatzhalter({ bezeichnung: bez, standort: standort, typ: r['Typ'] || r['typ'] || '',
+                letztePruefung: r['LetztePruefung'] || r['letztePruefung'], intervallMonate: r['IntervallMonate'] || r['intervallMonate'],
+                pruefFirma: r['Prueffirma'] || r['pruefFirma'], bemerkung: r['Bemerkung'] || r['bemerkung'] })) { skipped++; continue; }
           var exists = false;
           for (var ei = 0; ei < S.anlagen.length; ei++) {
             if (S.anlagen[ei].bezeichnung === bez && S.anlagen[ei].standort === standort) { exists = true; break; }
@@ -3147,6 +3311,17 @@ document.addEventListener('click', function(e) {
 
   /* ── BACKUP ── */
   if (a.action === 'backup-export') { exportBackup(); return; }
+  if (a.action === 'srv-save' || a.action === 'srv-now') {
+    var su = ((document.getElementById('s-srv-url') || {}).value || '').trim();
+    var sk = ((document.getElementById('s-srv-key') || {}).value || '').trim();
+    if (su && !/^https:\/\//.test(su) && !/^http:\/\/localhost[:/]/.test(su)) { alert('Die Server-Adresse muss mit https:// beginnen.'); return; }
+    S.srvUrl = su; S.srvKey = sk;
+    try { localStorage.setItem('bs2_srv_url', su); localStorage.setItem('bs2_srv_key', sk); } catch(e) {}
+    if (a.action === 'srv-now') { serverBackupNow(true); render(); }
+    else { render(); alert(srvConfigured() ? 'Gespeichert. Die App sichert ab jetzt automatisch.' : 'Gespeichert. Ohne Adresse und Schlüssel ist die Server-Sicherung aus.'); }
+    return;
+  }
+  if (a.action === 'daten-bereinigen') { datenBereinigen(); return; }
   if (a.action === 'backup-import') { document.getElementById('backup-input').value=''; document.getElementById('backup-input').click(); return; }
   if (a.action === 'xlsx-export') { exportXLSX(); return; }
   if (a.action === 'xlsx-import') { document.getElementById('xlsx-input').value=''; document.getElementById('xlsx-input').click(); return; }
@@ -4353,7 +4528,11 @@ document.addEventListener('DOMContentLoaded', function() {
   render();
   // Fotos liegen in IndexedDB und werden asynchron nachgeladen, dann einmal neu rendern
   loadPhotosAsync().then(function() {
+    S.photosLoaded = true;
     render();
+    // Server-Sicherung: beim Start offene Änderungen nachsenden, ebenso sobald wieder Netz da ist
+    if (srvConfigured()) setTimeout(function() { serverBackupNow(false); }, 5000);
+    window.addEventListener('online', function() { if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false); });
     // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
     // (erst NACH dem Nachladen der Fotos, damit das Backup vollständig ist)
     if (S.inspections.length > 0) {
