@@ -219,6 +219,15 @@ window.onerror = function(msg, src, line) {
 };
 
 var LOCATIONS = ['Brunnthal','Englischer Garten','Erding','Hirschgarten','München Mitte','München Nord','Sendling','Theresienhöhe','Trudering','WERK12'];
+// Begehungsplan ab 24.10.2026: Stufe A alle 91 Tage, Stufe B alle 182 Tage
+var BEGEHUNGSPLAN = { 'Brunnthal':'91', 'Englischer Garten':'91', 'WERK12':'91', 'München Mitte':'91', 'München Nord':'91', 'Sendling':'91', 'Erding':'182', 'Trudering':'182', 'Theresienhöhe':'182', 'Hirschgarten':'182' };
+// Alte 60-Tage-Intervalle (und leere) auf den Begehungsplan umstellen
+function applyBegehungsplan() {
+  for (var loc in BEGEHUNGSPLAN) {
+    var v = String(S.intervalle[loc] || '0');
+    if (v === '0' || v === '60') S.intervalle[loc] = BEGEHUNGSPLAN[loc];
+  }
+}
 var APP_URL = 'https://huebner110.github.io/Brandschutz-app/';
 var FLOOR_OPTIONS = ['EG','1.OG','2.OG','3.OG','DG','UG','2.UG'];
 
@@ -524,6 +533,12 @@ function load() {
       if (S.categories[pi].id === 'pfl') { hasPfl = true; break; }
     }
     if (!hasPfl) { S.categories.push(clone(PFLICHT_CAT)); save(); }
+    // Migration: Begehungsplan 24.10.2026 einmalig übernehmen
+    if (!localStorage.getItem('bs2_plan_241026')) {
+      applyBegehungsplan();
+      localStorage.setItem('bs2_plan_241026', '1');
+      save();
+    }
   } catch(e) {
     S.categories = clone(DEFAULT_CATEGORIES);
     S.inspections = [];
@@ -1462,7 +1477,7 @@ function vSettings() {
       '</div></div>';
   }).join('');
 
-  var intervalOpts = ['0','30','60','90','180','365'].map(function(v) {
+  var intervalOpts = ['0','30','60','90','91','180','182','365'].map(function(v) {
     return '<option value="' + v + '">' + (v === '0' ? 'Kein' : v + ' Tage') + '</option>';
   }).join('');
 
@@ -1470,7 +1485,7 @@ function vSettings() {
   for (var li = 0; li < LOCATIONS.length; li++) {
     var loc = LOCATIONS[li];
     var cur = S.intervalle[loc] || '0';
-    var opts = ['0','30','60','90','180','365'].map(function(v) {
+    var opts = ['0','30','60','90','91','180','182','365'].map(function(v) {
       return '<option value="' + v + '"' + (String(cur) === v ? ' selected' : '') + '>' + (v === '0' ? 'Kein' : v + ' Tage') + '</option>';
     }).join('');
     intervallHtml += '<div class="interval-row">' +
@@ -2539,7 +2554,7 @@ function importBackup(text) {
     var addedVt   = mergeById(S.vertraege, data.vertraege);
     var addedKt   = mergeById(S.kontakte, data.kontakte);
     var addedAg   = mergeById(S.aufgaben, data.aufgaben);
-    if (data.intervalle)    S.intervalle    = data.intervalle;
+    if (data.intervalle)  { S.intervalle    = data.intervalle; applyBegehungsplan(); }
     if (data.defaultBegeher)S.defaultBegeher= data.defaultBegeher;
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
     if (data.firmierung)    S.firmierung    = data.firmierung;
