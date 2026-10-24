@@ -4533,6 +4533,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Server-Sicherung: beim Start offene Änderungen nachsenden, ebenso sobald wieder Netz da ist
     if (srvConfigured()) setTimeout(function() { serverBackupNow(false); }, 5000);
     window.addEventListener('online', function() { if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false); });
+    // iOS hält Zeitgeber im Hintergrund an: beim Verlassen sofort senden, beim Zurückkommen Vorgemerktes nachholen
+    document.addEventListener('visibilitychange', function() {
+      if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false);
+    });
     // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
     // (erst NACH dem Nachladen der Fotos, damit das Backup vollständig ist)
     if (S.inspections.length > 0) {
