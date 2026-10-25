@@ -829,6 +829,11 @@ function vHome() {
   }).join('');
 
   var recentHtml = recent.length ? '<div class="section-header">Letzte Begehung je Standort</div>' + recent.map(inspListeHtml).join('') : '';
+  // Offene Direktmeldungen (mindestens ein nicht behobener Mangel), neueste zuerst; erledigte stehen auf der Standortseite
+  var meldungen = S.inspections.filter(function(i) {
+    return i.schnellmeldung && (i.maengel || []).some(function(m) { return !m.behoben; });
+  }).sort(nachDatumAbsteigend);
+  if (meldungen.length) recentHtml += '<div class="section-header">Offene Direktmeldungen</div>' + meldungen.map(inspListeHtml).join('');
 
   return '<div class="header header-dark">' +
     LOGO_HTML +
@@ -872,6 +877,14 @@ function vHome() {
 
 function nachDatumAbsteigend(a, b) { return (b.datum || '').localeCompare(a.datum || ''); }
 
+// Kürzt am Wortende und hängt "…" an
+function textKuerzen(s, n) {
+  s = String(s || '');
+  if (s.length <= n) return s;
+  var cut = s.slice(0, n), leer = cut.lastIndexOf(' ');
+  return (leer > n * 0.6 ? cut.slice(0, leer) : cut).replace(/[\s,;:.]+$/, '') + ' …';
+}
+
 // Eine Begehung oder Direktmeldung als Listeneintrag (Startseite, Standortseite)
 function inspListeHtml(insp) {
   var c = inspCounts(insp);
@@ -884,7 +897,8 @@ function inspListeHtml(insp) {
   return '<div class="inspection-item" data-action="view-insp" data-id="' + insp.id + '">' +
     '<div class="inspection-item-left">' +
     '<div class="inspection-item-title">' + insp.standort + '</div>' +
-    '<div class="inspection-item-sub">' + fmtDate(insp.datum) + ' &middot; ' + insp.begeher + '</div>' +
+    '<div class="inspection-item-sub">' + fmtDate(insp.datum) + ' &middot; ' +
+    (insp.schnellmeldung && insp.maengel && insp.maengel[0] ? escH(textKuerzen(mangelKurz(insp.maengel[0]), 70)) : insp.begeher) + '</div>' +
     '</div>' +
     '<div class="inspection-item-right">' + mangelBadge + statusBadge +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>' +
