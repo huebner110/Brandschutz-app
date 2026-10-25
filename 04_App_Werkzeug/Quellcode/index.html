@@ -496,6 +496,7 @@ function save() {
     localStorage.setItem('bs2_srv_url', S.srvUrl);
     localStorage.setItem('bs2_srv_key', S.srvKey);
   } catch(e) { console.warn('Storage full', e); }
+  syncTrack();
   scheduleServerBackup();
   // Fotos getrennt und asynchron in IndexedDB sichern (blockiert die UI nicht)
   S.inspections.forEach(function(insp) {
@@ -1532,7 +1533,7 @@ function vSettings() {
     catsHtml +
     '<div class="section-header">Server-Sicherung</div>' +
     '<div class="card" style="margin-bottom:12px">' +
-    '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Die App schickt ihre Daten nach jeder Änderung automatisch an den eigenen Server. Ohne Netz wird später nachgesendet. Adresse und Schlüssel gelten nur für dieses Gerät.</div>' +
+    '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Die App schickt ihre Daten nach jeder Änderung automatisch an den eigenen Server und gleicht sich darüber mit den anderen Geräten ab. Ohne Netz wird später nachgesendet. Adresse und Schlüssel gelten nur für dieses Gerät.</div>' +
     '<div class="form-group"><label class="form-label">Server-Adresse</label>' +
     '<input type="url" class="form-input" id="s-srv-url" value="' + S.srvUrl + '" placeholder="https://…" autocapitalize="off" autocorrect="off"></div>' +
     '<div class="form-group"><label class="form-label">Schlüssel für dieses Gerät</label>' +
@@ -1541,7 +1542,9 @@ function vSettings() {
     '<div style="display:flex;gap:8px">' +
     '<button class="btn-outline" style="flex:1" data-action="srv-save">Speichern</button>' +
     '<button class="btn-primary" style="flex:1" data-action="srv-now">Jetzt sichern</button>' +
-    '</div></div>' +
+    '</div>' +
+    '<button class="btn-outline" style="width:100%;margin-top:8px" data-action="sync-now">Jetzt mit anderen Geräten abgleichen</button>' +
+    '</div>' +
     '<div class="section-header">Export &amp; Datensicherung</div>' +
     '<div class="card" style="margin-bottom:12px">' +
     '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Vollständige Datensicherung aller App-Inhalte als JSON-Datei. Kann auf einem anderen Gerät oder nach einem Neustart wiederhergestellt werden.</div>' +
@@ -2687,7 +2690,221 @@ function srvStatusHtml() {
   if (srvBusy) parts.push('Sicherung läuft …');
   else if (pending && err) parts.push('<span style="color:var(--crit)">Ausstehend, letzter Versuch fehlgeschlagen: ' + err.split('|').slice(1).join('|') + '</span>');
   else if (pending) parts.push('Änderungen werden in Kürze gesendet.');
+  var syncLast = localStorage.getItem('bs2_sync_last');
+  var syncErr = localStorage.getItem('bs2_sync_error');
+  parts.push(syncLast ? 'Zuletzt abgeglichen: ' + fmt(syncLast) : 'Noch kein Abgleich mit den anderen Geräten.');
+  if (syncBusy) parts.push('Abgleich läuft …');
+  else if (syncErr) parts.push('<span style="color:var(--crit)">Letzter Abgleich fehlgeschlagen: ' + syncErr.split('|').slice(1).join('|') + '</span>');
+  else if (syncOffen()) parts.push('Änderungen werden in Kürze abgeglichen.');
   return parts.join('<br>');
+}
+
+/* ── ABGLEICH ZWISCHEN DEN GERÄTEN (Stufe 2) ──
+   Jeder Eintrag (Begehung, Anlage, Vertrag, Kontakt, Aufgabe, Unterweisung, Mitarbeiter je
+   Standort, Einstellung) wird einzeln mit dem gemeinsamen Stand auf dem Server abgeglichen.
+   Die App merkt sich je Eintrag einen Fingerabdruck und die Änderungszeit (bs2_sync_meta).
+   Weicht der Fingerabdruck beim Speichern ab, gilt der Eintrag als geändert und wird gesendet.
+   Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
+   haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
+var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen'];
+var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc'];
+var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
+
+function syncEintraege() {
+  var out = {};
+  SYNC_LISTEN.forEach(function(b) {
+    var m = {};
+    (S[b] || []).forEach(function(x) { if (x && x.id) m[x.id] = x; });
+    out[b] = m;
+  });
+  out.mitarbeiter = {};
+  Object.keys(S.mitarbeiter || {}).forEach(function(k) { out.mitarbeiter[k] = S.mitarbeiter[k]; });
+  out.einstellungen = {};
+  SYNC_EINSTELLUNGEN.forEach(function(k) { if (S[k] !== undefined) out.einstellungen[k] = S[k]; });
+  return out;
+}
+
+function syncSig(wert) {
+  // Fotos (lange Texte) nur über Länge und Ende vergleichen, damit das auch bei vielen Fotos schnell bleibt
+  return srvHash(JSON.stringify(wert, function(k, v) {
+    return (typeof v === 'string' && v.length > 2000) ? 'P' + v.length + ':' + v.slice(-40) : v;
+  }) || 'leer');
+}
+
+function syncMetaLaden() {
+  if (!syncMeta) {
+    try { syncMeta = JSON.parse(localStorage.getItem('bs2_sync_meta') || 'null'); } catch(e) { syncMeta = null; }
+  }
+  return syncMeta;
+}
+
+function syncMetaSpeichern() {
+  try { localStorage.setItem('bs2_sync_meta', JSON.stringify(syncMeta)); } catch(e) { console.warn('Abgleich: Merkliste nicht gespeichert', e); }
+}
+
+function syncOffen() {
+  var meta = syncMetaLaden() || {};
+  return Object.keys(meta).some(function(b) {
+    return Object.keys(meta[b]).some(function(id) { return meta[b][id].d; });
+  });
+}
+
+// Vergleicht den App-Stand mit der Merkliste und merkt geänderte und gelöschte Einträge zum Senden vor
+function syncTrack() {
+  if (!srvConfigured() || !S.photosLoaded) return;
+  var meta = syncMetaLaden();
+  var erstmals = !meta;
+  if (erstmals) meta = syncMeta = {};
+  var jetzt = Date.now(), geaendert = 0, weg = [];
+  var akt = syncEintraege();
+  Object.keys(akt).forEach(function(b) {
+    var mb = meta[b] || (meta[b] = {});
+    Object.keys(akt[b]).forEach(function(id) {
+      var h = syncSig(akt[b][id]);
+      var alt = mb[id];
+      if (!alt || alt.x || alt.h !== h) {
+        mb[id] = { h: h, t: erstmals ? 0 : jetzt, d: 1 };
+        geaendert++;
+      }
+    });
+    Object.keys(mb).forEach(function(id) {
+      if (!mb[id].x && !Object.prototype.hasOwnProperty.call(akt[b], id)) weg.push([b, id]);
+    });
+  });
+  // Schutz vor versehentlichem Massenlöschen auf allen Geräten
+  if (weg.length > 3 && !S.syncLoeschenErlaubt) {
+    if (!confirm(weg.length + ' Einträge wurden auf diesem Gerät entfernt. Sollen sie auch auf den anderen Geräten gelöscht werden?\n\nAbbrechen: Sie werden beim nächsten Abgleich vom Server zurückgeholt.')) {
+      weg.forEach(function(w) { delete meta[w[0]][w[1]]; });
+      // Neu abgleichen wie beim ersten Mal: nur Fehlendes kommt mit Inhalt zurück
+      try { localStorage.setItem('bs2_sync_rev', '0'); localStorage.removeItem('bs2_sync_init'); } catch(e) {}
+      weg = [];
+      geaendert++;
+    }
+  }
+  S.syncLoeschenErlaubt = false;
+  weg.forEach(function(w) { meta[w[0]][w[1]] = { h: 'DEL', t: jetzt, d: 1, x: 1 }; geaendert++; });
+  if (geaendert) { syncMetaSpeichern(); scheduleSync(3000); }
+}
+
+function scheduleSync(ms) {
+  if (!srvConfigured()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(function() { syncNow(false); }, ms || 3000);
+}
+
+function syncNow(manual) {
+  clearTimeout(syncTimer);
+  if (!srvConfigured()) { if (manual) alert('Bitte zuerst Server-Adresse und Schlüssel eintragen.'); return Promise.resolve(); }
+  if (!S.photosLoaded) { syncTimer = setTimeout(function() { syncNow(manual); }, 3000); return Promise.resolve(); }
+  if (syncBusy) { syncAgain = true; return Promise.resolve(); }
+  syncTrack();
+  var meta = syncMetaLaden() || {};
+  var akt = syncEintraege();
+  var gesendet = [], aenderungen = [], bekannt = null;
+  var seit = parseInt(localStorage.getItem('bs2_sync_rev') || '0', 10) || 0;
+  var vorab = !localStorage.getItem('bs2_sync_init');
+  if (vorab) {
+    // Erster Abgleich: zuerst nur Fingerabdrücke schicken. Was der Server schon gleich hat,
+    // wird nur bestätigt, die Fotos gehen also nicht doppelt hin und her. Der Rest folgt danach.
+    bekannt = {};
+    Object.keys(meta).forEach(function(b) {
+      Object.keys(meta[b]).forEach(function(id) { if (!meta[b][id].x) bekannt[b + '|' + id] = meta[b][id].h; });
+    });
+  } else {
+    Object.keys(meta).forEach(function(b) {
+      Object.keys(meta[b]).forEach(function(id) {
+        var m = meta[b][id];
+        if (!m.d) return;
+        if (!m.x && !Object.prototype.hasOwnProperty.call(akt[b] || {}, id)) return;
+        gesendet.push([b, id, m.t]);
+        aenderungen.push(m.x ? { c: b, id: id, t: m.t, x: true } : { c: b, id: id, t: m.t, h: m.h, data: akt[b][id] });
+      });
+    });
+  }
+  syncBusy = true;
+  if (S.view === 'settings') render();
+  return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/sync', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seit: seit, aenderungen: aenderungen, bekannt: bekannt })
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(res) {
+      if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
+      // Gesendetes gilt als erledigt, sofern es seitdem nicht erneut geändert wurde
+      gesendet.forEach(function(g) {
+        var m = meta[g[0]] && meta[g[0]][g[1]];
+        if (m && m.t === g[2]) delete m.d;
+      });
+      var n = syncAnwenden(res.aenderungen || []);
+      try {
+        localStorage.setItem('bs2_sync_rev', String(res.rev || 0));
+        localStorage.setItem('bs2_sync_last', new Date().toISOString());
+        localStorage.removeItem('bs2_sync_error');
+      } catch(e) {}
+      syncMetaSpeichern();
+      if (vorab) {
+        // nach dem Vorabgleich gleich das Fehlende senden
+        try { localStorage.setItem('bs2_sync_init', '1'); } catch(e) {}
+        if (syncOffen()) syncAgain = true;
+      }
+      if (manual) alert('Abgeglichen: ' + aenderungen.length + ' gesendet, ' + n + ' von anderen Geräten übernommen.');
+    });
+  }).catch(function(err) {
+    try { localStorage.setItem('bs2_sync_error', new Date().toISOString() + '|' + (err && err.message || 'Fehler')); } catch(e) {}
+    if (manual) alert('Abgleich fehlgeschlagen: ' + (err && err.message || 'keine Verbindung') + '. Die App versucht es später automatisch erneut.');
+  }).then(function() {
+    syncBusy = false;
+    if (S.view === 'settings') render();
+    if (syncAgain) { syncAgain = false; scheduleSync(1000); }
+  });
+}
+
+// Übernimmt Einträge vom Server in die App, außer hier gibt es eine neuere, noch nicht gesendete Fassung
+function syncAnwenden(liste) {
+  var meta = syncMetaLaden() || (syncMeta = {});
+  var n = 0, ohneFotos = [];
+  liste.forEach(function(e) {
+    var b = e.c, id = e.id;
+    var mb = meta[b] || (meta[b] = {});
+    var lokal = mb[id];
+    if (lokal && lokal.d && lokal.t > e.t) return;
+    if (e.gleich) {
+      // Server hat denselben Stand: nur die Änderungszeit übernehmen, Inhalt bleibt
+      if (lokal && lokal.h === e.h) mb[id] = { h: e.h, t: e.t };
+      return;
+    }
+    if (SYNC_LISTEN.indexOf(b) !== -1) {
+      var arr = S[b] || (S[b] = []);
+      var idx = -1;
+      for (var i = 0; i < arr.length; i++) { if (arr[i] && arr[i].id === id) { idx = i; break; } }
+      if (e.x) {
+        if (idx !== -1) arr.splice(idx, 1);
+        if (b === 'inspections') ohneFotos.push(id);
+      } else {
+        if (idx !== -1) arr[idx] = e.data; else arr.push(e.data);
+        if (b === 'inspections') {
+          var pd = extractPhotos(e.data);
+          if (!Object.keys(pd.checks).length && !Object.keys(pd.maengel).length) ohneFotos.push(id);
+          if (S.currentInspection && S.currentInspection.id === id) S.currentInspection = e.data;
+        }
+      }
+    } else if (b === 'mitarbeiter') {
+      if (e.x) delete S.mitarbeiter[id]; else S.mitarbeiter[id] = e.data;
+    } else if (b === 'einstellungen') {
+      if (SYNC_EINSTELLUNGEN.indexOf(id) === -1) return;
+      if (!e.x) S[id] = e.data;
+    } else return;
+    mb[id] = e.x ? { h: 'DEL', t: e.t, x: 1 } : { h: syncSig(e.data), t: e.t };
+    n++;
+  });
+  if (n) {
+    // Fotos liegen getrennt in IndexedDB: Begehungen ohne Fotos dort ebenfalls leeren
+    ohneFotos.forEach(function(id) { photoDbDelete(id); });
+    save();
+    var el = document.activeElement;
+    if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) render();
+  }
+  return n;
 }
 
 /* ── DATEN BEREINIGEN ──
@@ -2739,6 +2956,7 @@ function datenBereinigen() {
   S.vertraege = weg(S.vertraege, p.vertraege);
   S.kontakte = weg(S.kontakte, p.kontakte);
   S.aufgaben = weg(S.aufgaben, p.aufgaben);
+  S.syncLoeschenErlaubt = true;
   save();
   alert(summe + ' Einträge entfernt. Jetzt: ' + S.anlagen.length + ' Anlagen, ' + S.vertraege.length + ' Verträge, ' + S.kontakte.length + ' Ansprechpartner.');
   render();
@@ -3318,7 +3536,12 @@ document.addEventListener('click', function(e) {
     S.srvUrl = su; S.srvKey = sk;
     try { localStorage.setItem('bs2_srv_url', su); localStorage.setItem('bs2_srv_key', sk); } catch(e) {}
     if (a.action === 'srv-now') { serverBackupNow(true); render(); }
-    else { render(); alert(srvConfigured() ? 'Gespeichert. Die App sichert ab jetzt automatisch.' : 'Gespeichert. Ohne Adresse und Schlüssel ist die Server-Sicherung aus.'); }
+    else { render(); alert(srvConfigured() ? 'Gespeichert. Die App sichert und gleicht ab jetzt automatisch ab.' : 'Gespeichert. Ohne Adresse und Schlüssel ist die Server-Sicherung aus.'); }
+    if (srvConfigured()) scheduleSync(1000);
+    return;
+  }
+  if (a.action === 'sync-now') {
+    syncNow(true);
     return;
   }
   if (a.action === 'daten-bereinigen') { datenBereinigen(); return; }
@@ -3942,7 +4165,10 @@ document.addEventListener('click', function(e) {
       localStorage.removeItem('bs2_begeher'); localStorage.removeItem('bs2_standort');
       localStorage.removeItem('bs2_email'); localStorage.removeItem('bs2_intervalle');
       localStorage.removeItem('bs2_gf_name'); localStorage.removeItem('bs2_gf_email'); localStorage.removeItem('bs2_gf_cc');
+      // Mit Abgleich: nichts auf den anderen Geräten löschen, sondern den Stand vom Server neu holen
+      localStorage.removeItem('bs2_sync_meta'); localStorage.removeItem('bs2_sync_rev'); localStorage.removeItem('bs2_sync_init'); syncMeta = null;
       load(); nav('home');
+      if (srvConfigured()) { syncNow(false); alert('Zurückgesetzt. Der gemeinsame Stand wird jetzt vom Server geladen.'); }
     }
     return;
   }
@@ -4532,11 +4758,18 @@ document.addEventListener('DOMContentLoaded', function() {
     render();
     // Server-Sicherung: beim Start offene Änderungen nachsenden, ebenso sobald wieder Netz da ist
     if (srvConfigured()) setTimeout(function() { serverBackupNow(false); }, 5000);
-    window.addEventListener('online', function() { if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false); });
+    window.addEventListener('online', function() {
+      if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false);
+      syncNow(false);
+    });
     // iOS hält Zeitgeber im Hintergrund an: beim Verlassen sofort senden, beim Zurückkommen Vorgemerktes nachholen
     document.addEventListener('visibilitychange', function() {
       if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false);
+      if (document.visibilityState === 'visible' || syncOffen()) syncNow(false);
     });
+    // Abgleich: beim Start und danach jede Minute, solange die App sichtbar ist
+    if (srvConfigured()) syncNow(false);
+    setInterval(function() { if (document.visibilityState === 'visible') syncNow(false); }, 60000);
     // Tägliches Auto-Backup: einmal pro Tag automatisch exportieren wenn Begehungen vorhanden
     // (erst NACH dem Nachladen der Fotos, damit das Backup vollständig ist)
     if (S.inspections.length > 0) {
