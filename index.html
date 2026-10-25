@@ -340,6 +340,7 @@ var S = {
   editKontaktId: null,
   technikStandort: 'Sendling',
   aufgaben: [],
+  vorschlaege: [],
   editAufgabeId: null,
   aufgabenFilter: 'alle',
   termineFilter: '90',
@@ -493,6 +494,7 @@ function save() {
     localStorage.setItem('bs2_vertraege', JSON.stringify(S.vertraege));
     localStorage.setItem('bs2_kontakte', JSON.stringify(S.kontakte));
     localStorage.setItem('bs2_aufgaben', JSON.stringify(S.aufgaben));
+    localStorage.setItem('bs2_vorschlaege', JSON.stringify(S.vorschlaege));
     localStorage.setItem('bs2_srv_url', S.srvUrl);
     localStorage.setItem('bs2_srv_key', S.srvKey);
   } catch(e) { console.warn('Storage full', e); }
@@ -534,6 +536,8 @@ function load() {
     S.kontakte = kt ? JSON.parse(kt) : [];
     var ag = localStorage.getItem('bs2_aufgaben');
     S.aufgaben = ag ? JSON.parse(ag) : clone(AUFGABEN_DEFAULT);
+    var vs = localStorage.getItem('bs2_vorschlaege');
+    S.vorschlaege = vs ? JSON.parse(vs) : [];
     S.intervalle = iv ? JSON.parse(iv) : {};
     S.srvUrl = localStorage.getItem('bs2_srv_url') || '';
     S.srvKey = localStorage.getItem('bs2_srv_key') || '';
@@ -693,7 +697,8 @@ function render() {
     aufgaben: vAufgaben,
     'aufgabe-form': vAufgabeForm,
     termine: vTerminkalender,
-    matrix: vMatrix
+    matrix: vMatrix,
+    vorschlaege: vVorschlaege
   };
   var fn = views[S.view] || vHome;
   app.innerHTML = fn();
@@ -898,6 +903,7 @@ function vHome() {
     '<button class="btn-outline" data-action="start-schnellmangel" style="margin-top:8px">Einzelnen Mangel melden</button>' +
     '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Für einen einzelnen Mangel ohne vollständige Begehung, z. B. als Bedenkenanzeige.</div>' +
     '</div>' +
+    vorschlagBannerHtml() +
     bannerHtml +
     recentHtml +
     '</div>';
@@ -2060,6 +2066,114 @@ function vAufgabeForm() {
     '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
 }
 
+/* ── VORSCHLÄGE AUS DEM MAIL-EINGANG ──
+   Der Server erkennt Brandschutz-Meldungen in eingehenden Mails und legt sie als Vorschlag an
+   (Bereich vorschlaege im Abgleich). Thomas prüft, ändert bei Bedarf und übernimmt sie als
+   Direktmeldung oder verwirft sie. Der Vorschlag bleibt mit Status erhalten, damit er nicht
+   erneut auftaucht. Texte stammen aus fremden Mails und werden deshalb immer maskiert (escH). */
+function escH(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function offeneVorschlaege() {
+  return (S.vorschlaege || []).filter(function(v) { return v && v.status === 'offen'; });
+}
+
+function vorschlagBannerHtml() {
+  var n = offeneVorschlaege().length;
+  if (!n) return '';
+  return '<div style="background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">' +
+    '<div style="flex:1;font-size:13px"><strong>' + n + ' ' + (n === 1 ? 'Vorschlag' : 'Vorschläge') + ' aus dem Mail-Eingang</strong><br>' +
+    '<span style="color:var(--text-light)">Erkannte Brandschutz-Meldungen prüfen und als Direktmeldung übernehmen.</span></div>' +
+    '<button class="btn-sm-outline" data-action="go-vorschlaege">Prüfen</button></div>';
+}
+
+function vVorschlaege() {
+  var offen = offeneVorschlaege().slice().sort(function(a, b) { return (b.erstellt || '').localeCompare(a.erstellt || ''); });
+  var erledigt = (S.vorschlaege || []).filter(function(v) { return v && v.status !== 'offen'; })
+    .sort(function(a, b) { return (b.erledigt || '').localeCompare(a.erledigt || ''); }).slice(0, 10);
+  var html = '';
+  if (!offen.length) html += '<div class="empty-state" style="padding:18px">Keine offenen Vorschläge.</div>';
+  offen.forEach(function(v) {
+    var q = v.quelle || {};
+    var standortOpts = '<option value="">Bitte wählen</option>' + LOCATIONS.map(function(l) {
+      return '<option value="' + l + '"' + (l === v.standort ? ' selected' : '') + '>' + l + '</option>';
+    }).join('');
+    var dringOpts = ['kritisch', 'mittel', 'gering'].map(function(d) {
+      return '<option value="' + d + '"' + (d === (v.dringlichkeit || 'mittel') ? ' selected' : '') + '>' + d.charAt(0).toUpperCase() + d.slice(1) + '</option>';
+    }).join('');
+    html += '<div class="card" style="margin-bottom:12px">' +
+      '<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;line-height:1.5">Mail von <strong>' + escH(q.von || 'unbekannt') + '</strong>' +
+      (q.datum ? ' vom ' + fmtDate(q.datum) : '') + (q.betreff ? '<br>Betreff: ' + escH(q.betreff) : '') + '</div>' +
+      (v.auszug ? '<div style="font-size:13px;background:var(--bg);border-left:3px solid var(--border);padding:8px 10px;margin-bottom:12px;white-space:pre-wrap">' + escH(v.auszug) + '</div>' : '') +
+      '<div class="form-group"><label class="form-label">Standort</label>' +
+      '<select class="form-select" id="vs-standort-' + v.id + '">' + standortOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Beschreibung</label>' +
+      '<textarea class="form-textarea" id="vs-beschr-' + v.id + '">' + escH(v.beschreibung) + '</textarea></div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<div class="form-group" style="flex:1"><label class="form-label">Dringlichkeit</label>' +
+      '<select class="form-select" id="vs-dring-' + v.id + '">' + dringOpts + '</select></div>' +
+      '<div class="form-group" style="flex:1"><label class="form-label">Frist</label>' +
+      '<input type="date" class="form-input" id="vs-frist-' + v.id + '" value="' + escH(v.frist) + '"></div></div>' +
+      '<div class="form-group"><label class="form-label">Zuständig</label>' +
+      '<input type="text" class="form-input" id="vs-zust-' + v.id + '" value="' + escH(v.zustaendig) + '" placeholder="Name oder Funktion"></div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button class="btn-outline" style="flex:1" data-action="vorschlag-verwerfen" data-vid="' + v.id + '">Verwerfen</button>' +
+      '<button class="btn-primary" style="flex:1" data-action="vorschlag-uebernehmen" data-vid="' + v.id + '">Als Direktmeldung übernehmen</button>' +
+      '</div></div>';
+  });
+  if (erledigt.length) {
+    html += '<div class="section-header">Zuletzt bearbeitet</div><div class="card">' + erledigt.map(function(v) {
+      return '<div style="font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><strong>' + escH(v.standort || 'ohne Standort') + '</strong> – ' +
+        escH((v.beschreibung || '').slice(0, 70)) + '<br><span style="font-size:11px;color:var(--text-light)">' +
+        (v.status === 'uebernommen' ? 'übernommen' : 'verworfen') + (v.erledigt ? ' am ' + fmtDate(v.erledigt) : '') + '</span></div>';
+    }).join('') + '</div>';
+  }
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Vorschläge</div>' +
+    '<div class="header-sub">aus dem Mail-Eingang</div></div>' +
+    '</div>' +
+    '<div class="content">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function vorschlagFinden(vid) {
+  for (var i = 0; i < (S.vorschlaege || []).length; i++) { if (S.vorschlaege[i].id === vid) return S.vorschlaege[i]; }
+  return null;
+}
+
+function vorschlagUebernehmen(vid) {
+  var v = vorschlagFinden(vid);
+  if (!v || v.status !== 'offen') return;
+  // Spitze Klammern entfernen: Mängel werden in der übrigen App als HTML angezeigt
+  var wert = function(feld) { return ((document.getElementById('vs-' + feld + '-' + vid) || {}).value || '').replace(/[<>]/g, '').trim(); };
+  var standort = wert('standort'), beschr = wert('beschr');
+  if (LOCATIONS.indexOf(standort) === -1) { alert('Bitte einen Standort wählen.'); return; }
+  if (!beschr) { alert('Bitte eine Beschreibung eingeben.'); return; }
+  var q = v.quelle || {};
+  var mid = uid();
+  var insp = { id: uid(), standort: standort, datum: today(), begeher: S.defaultBegeher, anwesende: '', checks: {}, maengel: [], schnellmeldung: true };
+  insp.checks['direkt-' + mid] = { status: 'mangel' };
+  insp.maengel.push({ id: mid, checkId: 'direkt-' + mid, checkName: 'Direktmeldung (ohne Begehung)', fotos: [],
+    beschreibung: beschr + '\n[Aus Mail von ' + String(q.von || 'unbekannt').replace(/[<>]/g, '') + (q.datum ? ' vom ' + fmtDate(q.datum) : '') + ']',
+    zustaendig: wert('zust'), frist: wert('frist'), dringlichkeit: wert('dring') || 'mittel', behoben: false, bedenken: false });
+  S.inspections.push(insp);
+  v.status = 'uebernommen'; v.erledigt = today(); v.inspId = insp.id;
+  v.standort = standort; v.beschreibung = beschr;
+  save();
+  alert('Als Direktmeldung für ' + standort + ' angelegt.');
+  render();
+}
+
+function vorschlagVerwerfen(vid) {
+  var v = vorschlagFinden(vid);
+  if (!v || v.status !== 'offen') return;
+  if (!confirm('Vorschlag verwerfen? Er wird dann nicht mehr angezeigt.')) return;
+  v.status = 'verworfen'; v.erledigt = today();
+  save();
+  render();
+}
+
 /* ── TECHNIK-MODUL ── */
 
 var ANLAGE_TYPEN = ['Feuerlöscher','BMA','BMZ','Notbeleuchtung','Brandschutztür','RWA','Sonstiges'];
@@ -2526,6 +2640,7 @@ function buildBackupData() {
     vertraege: S.vertraege,
     kontakte: S.kontakte,
     aufgaben: S.aufgaben,
+    vorschlaege: S.vorschlaege,
     intervalle: S.intervalle,
     defaultBegeher: S.defaultBegeher,
     defaultEmail: S.defaultEmail,
@@ -2586,6 +2701,7 @@ function importBackup(text) {
     var addedVt   = mergeById(S.vertraege, data.vertraege);
     var addedKt   = mergeById(S.kontakte, data.kontakte);
     var addedAg   = mergeById(S.aufgaben, data.aufgaben);
+    addedAg      += mergeById(S.vorschlaege, data.vorschlaege);
     if (data.intervalle)  { S.intervalle    = data.intervalle; applyBegehungsplan(); }
     if (data.defaultBegeher)S.defaultBegeher= data.defaultBegeher;
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
@@ -2706,7 +2822,7 @@ function srvStatusHtml() {
    Weicht der Fingerabdruck beim Speichern ab, gilt der Eintrag als geändert und wird gesendet.
    Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
    haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
-var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen'];
+var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege'];
 var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc'];
 var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
 
@@ -3519,6 +3635,9 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-qr') { nav('qr-codes'); return; }
   if (a.action === 'go-unterweisungen') { nav('unterweisungen'); return; }
   if (a.action === 'go-technik') { nav('technik'); return; }
+  if (a.action === 'go-vorschlaege') { nav('vorschlaege'); return; }
+  if (a.action === 'vorschlag-uebernehmen') { vorschlagUebernehmen(a.vid); return; }
+  if (a.action === 'vorschlag-verwerfen') { vorschlagVerwerfen(a.vid); return; }
   if (a.action === 'go-aufgaben') { nav('aufgaben'); return; }
 
   if (a.action === 'email-choice') {
