@@ -140,6 +140,10 @@
     .tab-leiste button.aktiv { color: var(--primary); }
     .tab-leiste .zahl { position: absolute; top: 2px; left: calc(50% + 6px); background: var(--crit); color: #fff; border-radius: 9px; font-size: 10px; padding: 0 5px; line-height: 16px; min-width: 16px; }
     .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 12px calc(10px + var(--safe-bottom)); background: rgba(27,26,24,0.95); backdrop-filter: blur(10px); border-top: 0.5px solid var(--border); }
+    /* Beim Tippen feste Leisten ausblenden: sonst schiebt Safari auf dem iPad die Seite beim Öffnen der Tastatur */
+    body.tippt .bottom-bar, body.tippt .tab-leiste { display: none; }
+    /* Unter 16 px zoomt Safari auf iPad/iPhone beim Antippen eines Feldes heran und verschiebt die Seite */
+    @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
     .seg-control { display: flex; background: var(--bg); border-radius: 10px; padding: 3px; gap: 2px; }
     .seg-btn { flex: 1; padding: 8px 4px; border: none; border-radius: 8px; background: transparent; font-size: 13px; font-weight: 600; color: var(--text-light); cursor: pointer; font-family: inherit; }
     .seg-btn:active { opacity: 0.7; }
@@ -732,14 +736,26 @@ function centerleiterEmailFor(standort) {
 }
 
 function nav(view, params) {
+  var vorher = S.view;
+  // Stelle in der Begehung merken, damit es nach dem Mangel-Formular dort weitergeht statt ganz oben
+  if (vorher === 'inspection') S.inspScrollY = window.scrollY;
   S.view = view;
   if (params) {
     var keys = Object.keys(params);
     for (var k = 0; k < keys.length; k++) { S[keys[k]] = params[keys[k]]; }
   }
   render();
-  window.scrollTo(0, 0);
+  window.scrollTo(0, (view === 'inspection' && vorher === 'defect' && S.inspScrollY) ? S.inspScrollY : 0);
 }
+
+// Merkt, ob gerade in ein Textfeld getippt wird (blendet über CSS die festen Leisten aus)
+function istTippfeld(el) {
+  return el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|file|range|color)$/i.test(el.type)));
+}
+document.addEventListener('focusin', function(e) { if (istTippfeld(e.target)) document.body.classList.add('tippt'); });
+document.addEventListener('focusout', function(e) {
+  if (istTippfeld(e.target)) setTimeout(function() { if (!istTippfeld(document.activeElement)) document.body.classList.remove('tippt'); }, 100);
+});
 
 function saveInsp() {
   if (!S.currentInspection) return;
