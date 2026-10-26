@@ -172,6 +172,9 @@
     .mangel-card-actions { padding: 4px 14px 10px; display: flex; gap: 8px; }
     .photo-preview-row { display: flex; gap: 6px; padding: 4px 14px 12px; flex-wrap: wrap; }
     .photo-preview-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 0.5px solid var(--border); }
+    .photo-preview-cell { width: 64px; }
+    .photo-preview-text { font-size: 9px; line-height: 1.2; color: var(--text-light); margin-top: 2px; overflow-wrap: anywhere; }
+    .photo-text-input { width: 80px; margin-top: 3px; padding: 3px 5px; font-size: 10px; border: 0.5px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); box-sizing: border-box; }
     .category-item-settings { background: var(--card); border-radius: 12px; border: 0.5px solid var(--border); padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
     .category-item-settings-left { flex: 1; min-width: 0; }
     .category-item-settings-name { font-size: 15px; font-weight: 600; }
@@ -1379,6 +1382,7 @@ function vDefect() {
     fotosHtml += '<div class="photo-thumb-wrapper">' +
       '<img class="photo-thumb" src="' + fotos[f] + '" alt="Foto ' + (f+1) + '">' +
       '<button class="photo-delete" data-action="del-photo" data-idx="' + f + '">&times;</button>' +
+      '<input type="text" class="photo-text-input" placeholder="Ort/Stockwerk" value="' + escH(mangelFotoText(m, f)) + '" onchange="setMangelFotoText(' + f + ', this.value)">' +
       '</div>';
   }
   fotosHtml += '<button class="photo-add-btn" data-action="add-photo-defect">' +
@@ -1456,7 +1460,7 @@ function vSchnellmangelErgebnis() {
   var fotosPreview = '';
   if (m.fotos && m.fotos.length) {
     fotosPreview = '<div class="photo-preview-row">';
-    for (var f = 0; f < m.fotos.length; f++) fotosPreview += '<img class="photo-preview-thumb" src="' + m.fotos[f] + '" alt="Foto">';
+    for (var f = 0; f < m.fotos.length; f++) fotosPreview += mangelFotoVorschau(m, f);
     fotosPreview += '</div>';
   }
 
@@ -1507,7 +1511,7 @@ function vSummary() {
       if (m.fotos && m.fotos.length) {
         fotosPreview = '<div class="photo-preview-row">';
         for (var fp = 0; fp < m.fotos.length; fp++) {
-          fotosPreview += '<img class="photo-preview-thumb" src="' + m.fotos[fp] + '" alt="Foto">';
+          fotosPreview += mangelFotoVorschau(m, fp);
         }
         fotosPreview += '</div>';
       }
@@ -3349,6 +3353,28 @@ function setCheckStockwerkText(iid, val) {
   saveInsp();
   render();
 }
+/* Beschriftung je Foto eines Mangels (Ort, Stockwerk, vorher/nachher): m.fotoTexte läuft parallel zu m.fotos. */
+function mangelFotoText(m, i) {
+  return (m.fotoTexte && m.fotoTexte[i]) || '';
+}
+function mangelFotoVorschau(m, i) {
+  var t = mangelFotoText(m, i);
+  var img = '<img class="photo-preview-thumb" src="' + m.fotos[i] + '" alt="Foto">';
+  return t ? '<div class="photo-preview-cell">' + img + '<div class="photo-preview-text">' + escH(t) + '</div></div>' : img;
+}
+function setMangelFotoText(idx, val) {
+  if (!S.currentInspection) return;
+  var ms = S.currentInspection.maengel || [];
+  for (var i = 0; i < ms.length; i++) {
+    if (ms[i].id !== S.currentDefectId) continue;
+    if (!ms[i].fotos || idx >= ms[i].fotos.length) return;
+    if (!ms[i].fotoTexte) ms[i].fotoTexte = [];
+    for (var j = 0; j < ms[i].fotos.length; j++) { if (ms[i].fotoTexte[j] == null) ms[i].fotoTexte[j] = ''; }
+    ms[i].fotoTexte[idx] = String(val || '').replace(/[<>]/g, '').trim();
+    saveInsp();
+    return;
+  }
+}
 /* Stockwerk je Foto eines Prüfpunkts: check.fotoStockwerke läuft parallel zu check.fotos.
    Fehlt ein Eintrag (ältere Begehungen), gilt das Stockwerk des Prüfpunkts. */
 function fotoStockwerk(ch, i) {
@@ -4365,7 +4391,9 @@ document.addEventListener('click', function(e) {
     var maengelPh = S.currentInspection.maengel || [];
     for (var mph = 0; mph < maengelPh.length; mph++) {
       if (maengelPh[mph].id === S.currentDefectId) {
-        maengelPh[mph].fotos.splice(parseInt(a.idx), 1); render(); break;
+        maengelPh[mph].fotos.splice(parseInt(a.idx), 1);
+        if (maengelPh[mph].fotoTexte) maengelPh[mph].fotoTexte.splice(parseInt(a.idx), 1);
+        render(); break;
       }
     }
     return;
@@ -4742,7 +4770,10 @@ function doExport() {
       var fotosEx = '';
       if (mg.fotos && mg.fotos.length) {
         fotosEx = '<div class="photos">';
-        for (var fp = 0; fp < mg.fotos.length; fp++) { fotosEx += '<img src="' + mg.fotos[fp] + '">'; }
+        for (var fp = 0; fp < mg.fotos.length; fp++) {
+          var mcap = escH(mangelFotoText(mg, fp));
+          fotosEx += mcap ? '<figure class="ph"><img src="' + mg.fotos[fp] + '"><figcaption>' + mcap + '</figcaption></figure>' : '<img src="' + mg.fotos[fp] + '">';
+        }
         fotosEx += '</div>';
       }
       var dringCap = mg.dringlichkeit.charAt(0).toUpperCase() + mg.dringlichkeit.slice(1);
@@ -4791,7 +4822,9 @@ function doExport() {
       if (bm.fotos && bm.fotos.length) {
         bmFotos = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;">';
         for (var bpf = 0; bpf < bm.fotos.length; bpf++) {
-          bmFotos += '<img src="' + bm.fotos[bpf] + '" style="width:110px;height:80px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;">';
+          var bcap = escH(mangelFotoText(bm, bpf));
+          bmFotos += '<div style="width:110px"><img src="' + bm.fotos[bpf] + '" style="width:110px;height:80px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;">' +
+            (bcap ? '<div style="font-size:7pt;color:#566573;text-align:center;margin-top:2px">' + bcap + '</div>' : '') + '</div>';
         }
         bmFotos += '</div>';
       }
