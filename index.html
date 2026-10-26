@@ -134,6 +134,11 @@
     .mangel-preview { display: flex; align-items: center; gap: 6px; background: var(--crit-bg); border: 0.5px solid var(--crit-border); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; cursor: pointer; }
     .mangel-preview:active { opacity: 0.75; }
     .mangel-preview-text { font-size: 12px; color: var(--crit); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.mit-leiste .content { padding-bottom: calc(84px + var(--safe-bottom)); }
+    .tab-leiste { position: fixed; bottom: 0; left: 0; right: 0; z-index: 150; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(20,19,17,0.97); backdrop-filter: blur(10px); border-top: 1px solid var(--border); padding: 4px 4px calc(4px + var(--safe-bottom)); }
+    .tab-leiste button { background: none; border: 0; color: var(--text-light); font-family: inherit; font-size: 11px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 5px; cursor: pointer; position: relative; }
+    .tab-leiste button.aktiv { color: var(--primary); }
+    .tab-leiste .zahl { position: absolute; top: 2px; left: calc(50% + 6px); background: var(--crit); color: #fff; border-radius: 9px; font-size: 10px; padding: 0 5px; line-height: 16px; min-width: 16px; }
     .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 12px calc(10px + var(--safe-bottom)); background: rgba(27,26,24,0.95); backdrop-filter: blur(10px); border-top: 0.5px solid var(--border); }
     .seg-control { display: flex; background: var(--bg); border-radius: 10px; padding: 3px; gap: 2px; }
     .seg-btn { flex: 1; padding: 8px 4px; border: none; border-radius: 8px; background: transparent; font-size: 13px; font-weight: 600; color: var(--text-light); cursor: pointer; font-family: inherit; }
@@ -391,7 +396,7 @@ var S = {
   aufgaben: [],
   vorschlaege: [],
   editAufgabeId: null,
-  aufgabenFilter: 'alle',
+  aufgabenFilter: 'aktiv',
   termineFilter: '90',
   csvImportTarget: null,
   // Server-Sicherung (Stufe 1): Adresse und Schlüssel nur auf diesem Gerät, nie im Backup
@@ -724,7 +729,8 @@ function render() {
   if (!app) return;
   var views = {
     home: vHome,
-    dashboard: vDashboard,
+    dashboard: vHome,
+    mehr: vMehr,
     'maengel-global': vMaengelGlobal,
     'qr-codes': vQrCodes,
     inspection: vInspection,
@@ -751,12 +757,54 @@ function render() {
     standort: vStandort
   };
   var fn = views[S.view] || vHome;
-  app.innerHTML = fn();
+  var leiste = TAB_VIEWS[S.view];
+  document.body.classList.toggle('mit-leiste', !!leiste);
+  app.innerHTML = fn() + (leiste ? tabLeisteHtml(leiste) : '');
   if (pendingPostRender) {
     var cb = pendingPostRender;
     pendingPostRender = null;
     setTimeout(cb, 50);
   }
+}
+
+/* ── LEISTE UNTEN ── Welche Seite zu welchem Reiter gehört */
+var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', 'maengel-global': 'maengel', termine: 'termine',
+  mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr',
+  matrix: 'mehr', 'qr-codes': 'mehr', settings: 'mehr', hilfe: 'mehr' };
+
+function tabLeisteHtml(aktiv) {
+  var nUeber = offeneMaengelAlle().filter(function(it) { return tageUeberfaellig(it.mangel) > 0; }).length;
+  var tabs = [
+    { id: 'home', action: 'go-home', label: 'Lage', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>' },
+    { id: 'maengel', action: 'go-maengel-global', label: 'Mängel', zahl: nUeber, icon: LB_ICON.mangel.replace(/15/g, '22') },
+    { id: 'termine', action: 'go-termine', label: 'Termine', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
+    { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
+  ];
+  return '<nav class="tab-leiste">' + tabs.map(function(t) {
+    return '<button class="' + (t.id === aktiv ? 'aktiv' : '') + '" data-action="' + t.action + '">' + t.icon + '<span>' + t.label + '</span>' +
+      (t.zahl ? '<span class="zahl">' + t.zahl + '</span>' : '') + '</button>';
+  }).join('') + '</nav>';
+}
+
+function vMehr() {
+  var nv = offeneVorschlaege().length;
+  var eintraege = [
+    { action: 'go-aufgaben', icon: 'aufgabe', titel: 'Aufgaben', sub: S.aufgaben.filter(function(t) { return t.status !== 'Erledigt'; }).length + ' offen' },
+    { action: 'go-technik', icon: 'technik', titel: 'Technik', sub: 'Anlagen, Wartungsverträge, Ansprechpartner' },
+    { action: 'go-unterweisungen', icon: 'unterweisung', titel: 'Unterweisungen', sub: 'Mitarbeiter und Nachweise je Standort' },
+    { action: 'go-vorschlaege', icon: 'mail', titel: 'Vorschläge aus Mails', sub: nv ? nv + ' neu' : 'keine neuen', ton: nv ? 'warn' : '' },
+    { action: 'go-matrix', icon: 'begehung', titel: 'Compliance-Matrix', sub: 'alle Standorte als Tabelle' },
+    { action: 'go-qr', icon: 'begehung', titel: 'QR-Codes', sub: 'zum Aushang je Standort' },
+    { action: 'go-settings', icon: 'technik', titel: 'Einstellungen', sub: 'Allgemein, Server, Daten' },
+    { action: 'go-hilfe', icon: 'aufgabe', titel: 'Hilfe', sub: 'alle Funktionen erklärt' }
+  ];
+  return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mehr</div></div></div>' +
+    '<div class="content lb"><div class="lb-panel"><ul class="lb-todo">' + eintraege.map(function(e) {
+      return '<li data-action="' + e.action + '"><span class="lb-icon' + (e.ton ? ' ' + e.ton : '') + '">' + LB_ICON[e.icon] + '</span>' +
+        '<span class="t"><b>' + e.titel + '</b><span>' + e.sub + '</span></span>' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></li>';
+    }).join('') + '</ul></div>' +
+    '<button class="btn-outline" style="width:100%" data-action="backup-export">Backup-Datei erstellen (.json)</button></div>';
 }
 
 /* ── HINWEIS-BANNER BERECHNEN ── */
@@ -843,35 +891,10 @@ function vHome() {
 
   return '<div class="header header-dark">' +
     LOGO_HTML +
-    '<div style="flex:1"></div>' +
-    '<button class="icon-btn" data-action="go-dashboard" aria-label="Übersicht" title="Standort-Übersicht">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>' +
-    '<button class="icon-btn" data-action="go-termine" aria-label="Terminkalender" title="Alle fälligen Termine">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>' +
-    '<button class="icon-btn" data-action="go-maengel-global" aria-label="Offene Mängel" title="Offene Mängel">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>' +
-    '<button class="icon-btn" data-action="go-settings" aria-label="Einstellungen">' +
-    '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
-    '<div style="position:relative">' +
-    '<button class="icon-btn" id="mehr-btn" aria-label="Mehr" title="Mehr">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button>' +
-    '<div id="mehr-menu" style="display:none;position:absolute;top:44px;right:0;background:#1a1a1a;border:1px solid var(--border);border-radius:12px;padding:6px;min-width:180px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.4)">' +
-    '<button class="mehr-item" data-action="backup-export">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Backup senden</button>' +
-    '<button class="mehr-item" data-action="go-dashboard">'+
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Standort-Übersicht</button>' +
-    '<button class="mehr-item" data-action="go-unterweisungen">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Unterweisungen</button>' +
-    '<button class="mehr-item" data-action="go-technik">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Technik</button>' +
-    '<button class="mehr-item" data-action="go-aufgaben">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/><polyline points="9 12 11 14 15 10"/></svg>Aufgaben</button>' +
-    '<button class="mehr-item" data-action="go-hilfe">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Hilfe</button>' +
-    '</div></div>' +
     '</div>' +
     '<div class="content lb">' +
     lagebildKopfHtml() +
+    fortsetzenHtml() +
     lagebildKachelnHtml() +
     heuteZuTunHtml() +
     '<div class="lb-panel"><h2>Neue Begehung oder Meldung</h2><div style="padding:12px">' +
@@ -879,6 +902,39 @@ function vHome() {
     '</div></div>' +
     recentHtml +
     '</div>';
+}
+
+// Bereiche, in denen schon alle Prüfpunkte bewertet sind (beim Öffnen zugeklappt)
+function fertigeBereiche(insp) {
+  var zu = {}, checks = insp.checks || {};
+  S.categories.forEach(function(c) {
+    if (c.items.length && c.items.every(function(it) { return checks[it.id] && checks[it.id].status; })) zu[c.id] = true;
+  });
+  return zu;
+}
+
+// Je Standort die letzte Begehung, wenn sie noch nicht vollständig ist
+function unfertigeBegehungen() {
+  return LOCATIONS.map(lastInspForStandortNachDatum).filter(function(i) {
+    if (!i) return false;
+    var c = inspCounts(i);
+    return c.total < c.totalItems;
+  }).sort(nachDatumAbsteigend);
+}
+
+function lastInspForStandortNachDatum(loc) {
+  return S.inspections.filter(function(i) { return i.standort === loc && !i.schnellmeldung; }).sort(nachDatumAbsteigend)[0];
+}
+
+function fortsetzenHtml() {
+  var liste = unfertigeBegehungen();
+  if (!liste.length) return '';
+  return '<div class="lb-panel"><h2>Begehung fortsetzen <small>noch nicht vollständig</small></h2><ul class="lb-todo">' + liste.map(function(i) {
+    var c = inspCounts(i);
+    return '<li data-action="insp-fortsetzen" data-id="' + i.id + '"><span class="lb-icon warn">' + LB_ICON.begehung + '</span>' +
+      '<span class="t"><b>' + i.standort + '</b><span>' + fmtDate(i.datum) + ' · ' + c.total + ' von ' + c.totalItems + ' Prüfpunkten</span></span>' +
+      '<span class="lb-pill warn">weiter</span></li>';
+  }).join('') + '</ul></div>';
 }
 
 function nachDatumAbsteigend(a, b) { return (b.datum || '').localeCompare(a.datum || ''); }
@@ -909,9 +965,6 @@ function inspListeHtml(insp) {
     '<div class="inspection-item-right">' + mangelBadge + statusBadge +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>' +
     '</div>' +
-    '<button class="del-insp-btn" data-action="del-insp" data-id="' + insp.id + '" aria-label="Begehung löschen">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>' +
-    '</button>' +
     '</div>';
 }
 
@@ -927,10 +980,28 @@ var LB_ICON = {
   aufgabe: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/><polyline points="9 12 11 14 15 10"/></svg>'
 };
 
+/* Alle offenen Mängel. Steht derselbe Prüfpunkt in einer späteren Begehung am selben
+   Standort wieder als Mangel (übernommen), zählt nur dieser neueste Eintrag, damit
+   nichts doppelt zählt. Erledigt ist ein Mangel nur über "behoben". */
 function offeneMaengelAlle() {
+  var letzte = {};
+  S.inspections.forEach(function(insp, idx) {
+    if (insp.schnellmeldung) return;
+    var checks = insp.checks || {};
+    Object.keys(checks).forEach(function(cid) {
+      if (!checks[cid] || checks[cid].status !== 'mangel') return;
+      var k = insp.standort + '|' + cid, cur = letzte[k], d = insp.datum || '';
+      if (!cur || d > cur.datum || (d === cur.datum && idx > cur.idx)) letzte[k] = { datum: d, idx: idx };
+    });
+  });
   var items = [];
-  S.inspections.forEach(function(insp) {
-    (insp.maengel || []).forEach(function(m) { if (!m.behoben) items.push({ insp: insp, mangel: m }); });
+  S.inspections.forEach(function(insp, idx) {
+    (insp.maengel || []).forEach(function(m) {
+      if (m.behoben) return;
+      var l = !insp.schnellmeldung && m.checkId ? letzte[insp.standort + '|' + m.checkId] : null;
+      if (l && l.idx !== idx) return;
+      items.push({ insp: insp, mangel: m });
+    });
   });
   return items;
 }
@@ -1078,15 +1149,7 @@ function vStandort() {
       return tageUeberfaellig(b.mangel) - tageUeberfaellig(a.mangel) || o.indexOf(a.mangel.dringlichkeit) - o.indexOf(b.mangel.dringlichkeit);
     });
   var mHtml = maengel.length ? maengel.map(function(it) {
-    var m = it.mangel, ue = tageUeberfaellig(m);
-    return '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
-      '<div class="mangel-card-header"><span class="mangel-card-cat">' + fmtDate(it.insp.datum) + (it.insp.schnellmeldung ? ' · Direktmeldung' : ' · Begehung') + '</span>' +
-      '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div>' +
-      '<div class="mangel-card-item">' + m.checkName + '</div>' +
-      '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
-      (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
-      (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
-      '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button></div></div>';
+    return mangelKarteHtml(it, false);
   }).join('') : '<div class="lb-leer">Keine offenen Mängel.</div>';
   var anlagen = S.anlagen.filter(function(a) { return a.standort === loc; });
   var verlauf = S.inspections.filter(function(i) { return i.standort === loc; }).sort(nachDatumAbsteigend);
@@ -1122,105 +1185,66 @@ function vStandort() {
     '</div>';
 }
 
-/* ── DASHBOARD ── */
-function vDashboard() {
-  var cardsHtml = '';
-  for (var li = 0; li < LOCATIONS.length; li++) {
-    var loc = LOCATIONS[li];
-    var last = lastInspForStandort(loc);
-    var openCount = 0;
-    var kritischCount = 0;
-    var isOverdue = false;
-    var interval = S.intervalle[loc] ? parseInt(S.intervalle[loc]) : 0;
-
-    if (last) {
-      var maengel = last.maengel || [];
-      for (var mi = 0; mi < maengel.length; mi++) {
-        if (!maengel[mi].behoben) {
-          openCount++;
-          if (maengel[mi].dringlichkeit === 'kritisch') kritischCount++;
-        }
-      }
-      if (interval > 0) {
-        var daysSince = daysBetween(last.datum, today());
-        isOverdue = daysSince > interval;
-      }
-    } else {
-      if (interval > 0) isOverdue = true;
-    }
-
-    var badges = '';
-    if (kritischCount > 0) badges += '<span class="badge badge-crit">' + kritischCount + ' kritisch</span>';
-    else if (openCount > 0) badges += '<span class="badge badge-warn">' + openCount + ' offen</span>';
-    else if (last) badges += '<span class="badge badge-ok">OK</span>';
-    if (isOverdue) badges += '<span class="badge badge-overdue">überfällig</span>';
-
-    cardsHtml += '<div class="dash-card' + (isOverdue ? ' dash-card-overdue' : '') + '" data-action="dash-start" data-loc="' + loc + '">' +
-      '<div class="dash-name">' + loc + '</div>' +
-      '<div class="dash-date">' + (last ? fmtDate(last.datum) : 'Keine Begehung') + '</div>' +
-      '<div class="dash-badges">' + badges + '</div>' +
-      '</div>';
-  }
-
-  return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
-    '<div class="header-center"><div class="header-title-sm">Standort-Übersicht</div></div>' +
-    '<button class="icon-btn" data-action="go-matrix" aria-label="Compliance-Matrix" title="Compliance-Matrix">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>' +
-    '<button class="icon-btn" data-action="go-qr" aria-label="QR-Codes">' +
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-3v3"/><path d="M18 21h3"/><path d="M21 21v-3"/><path d="M13 3v5h5"/><path d="M13 13h5v5"/></svg></button>' +
-    '</div>' +
-    '<div class="content">' +
-    '<div class="section-header">Tippen zum Starten einer Begehung</div>' +
-    '<div class="dash-grid">' + cardsHtml + '</div>' +
-    '</div>';
+/* ── OFFENE MÄNGEL GLOBAL ── nach Standort gruppiert, mit Filtern */
+function mangelKarteHtml(it, mitStandort) {
+  var m = it.mangel, ue = tageUeberfaellig(m);
+  return '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
+    '<div class="mangel-card-header"><span class="mangel-card-cat">' + (mitStandort ? it.insp.standort + ' &middot; ' : '') + fmtDate(it.insp.datum) +
+    (it.insp.schnellmeldung ? ' · Direktmeldung' : ' · Begehung') + '</span>' +
+    '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div>' +
+    '<div class="mangel-card-item">' + escH(mangelKurz(m)) + '</div>' +
+    (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 ? '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' : '') +
+    (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
+    (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
+    '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button></div></div>';
 }
 
-/* ── OFFENE MÄNGEL GLOBAL ── */
+function mangelSortierung(a, b) {
+  var o = ['kritisch', 'mittel', 'gering'];
+  return tageUeberfaellig(b.mangel) - tageUeberfaellig(a.mangel) || o.indexOf(a.mangel.dringlichkeit) - o.indexOf(b.mangel.dringlichkeit);
+}
+
 function vMaengelGlobal() {
-  var items = [];
-  for (var ii = 0; ii < S.inspections.length; ii++) {
-    var insp = S.inspections[ii];
-    var maengel = insp.maengel || [];
-    for (var mi = 0; mi < maengel.length; mi++) {
-      if (!maengel[mi].behoben) {
-        items.push({ insp: insp, mangel: maengel[mi] });
-      }
-    }
-  }
-  items.sort(function(a, b) {
-    var order = ['kritisch','mittel','gering'];
-    return order.indexOf(a.mangel.dringlichkeit) - order.indexOf(b.mangel.dringlichkeit);
+  var alle = offeneMaengelAlle();
+  var filter = S.mgFilter || 'alle';
+  var ort = S.mgStandort || '';
+  var items = alle.filter(function(it) {
+    if (ort && it.insp.standort !== ort) return false;
+    if (filter === 'ueber') return tageUeberfaellig(it.mangel) > 0;
+    if (filter === 'krit') return it.mangel.dringlichkeit === 'kritisch';
+    return true;
   });
+  var zahl = function(f) { return alle.filter(function(it) { return (!ort || it.insp.standort === ort) && (f === 'ueber' ? tageUeberfaellig(it.mangel) > 0 : f === 'krit' ? it.mangel.dringlichkeit === 'kritisch' : true); }).length; };
+  var filterHtml = [['alle', 'Alle'], ['ueber', 'Überfällig'], ['krit', 'Kritisch']].map(function(f) {
+    return '<button class="filter-btn' + (filter === f[0] ? ' filter-btn-active' : '') + '" data-action="mg-filter" data-filter="' + f[0] + '">' + f[1] + ' ' + zahl(f[0]) + '</button>';
+  }).join('');
+  var ortOpts = '<option value="">Alle Standorte</option>' + LOCATIONS.map(function(l) {
+    var n = alle.filter(function(it) { return it.insp.standort === l; }).length;
+    return '<option value="' + l + '"' + (l === ort ? ' selected' : '') + '>' + l + ' (' + n + ')</option>';
+  }).join('');
 
   var html = '';
-  if (items.length === 0) {
-    html = '<div class="card empty-state">Keine offenen Mängel.</div>';
-  } else {
-    for (var k = 0; k < items.length; k++) {
-      var it = items[k];
-      var m = it.mangel;
-      var inspRef = it.insp;
-      html += '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
-        '<div class="mangel-card-header">' +
-        '<span class="mangel-card-cat">' + inspRef.standort + ' &middot; ' + fmtDate(inspRef.datum) + '</span>' +
-        '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span>' +
-        '</div>' +
-        '<div class="mangel-card-item">' + m.checkName + '</div>' +
-        '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
-        (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
-        (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
-        '<div class="mangel-card-actions">' +
-        '<button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + inspRef.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
-        '</div></div>';
-    }
+  if (!items.length) html = '<div class="card empty-state">Keine offenen Mängel für diese Auswahl.</div>';
+  else {
+    // Standorte mit den dringendsten Mängeln zuerst
+    var gruppen = LOCATIONS.map(function(l) {
+      return { loc: l, liste: items.filter(function(it) { return it.insp.standort === l; }).sort(mangelSortierung) };
+    }).filter(function(g) { return g.liste.length; })
+      .sort(function(a, b) { return mangelSortierung(a.liste[0], b.liste[0]) || b.liste.length - a.liste.length; });
+    html = gruppen.map(function(g) {
+      return '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center" data-action="go-standort" data-loc="' + g.loc + '">' +
+        '<span>' + g.loc + ' · ' + g.liste.length + '</span><span style="text-transform:none;font-weight:600;color:var(--primary)">Standort ›</span></div>' +
+        g.liste.map(function(it) { return mangelKarteHtml(it, false); }).join('');
+    }).join('');
   }
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Offene Mängel</div>' +
-    '<div class="header-sub">' + items.length + ' gesamt</div></div>' +
+    '<div class="header-sub">' + items.length + (items.length === alle.length ? ' gesamt' : ' von ' + alle.length) + '</div></div>' +
     '</div>' +
+    '<div style="padding:10px 12px;background:var(--card);border-bottom:0.5px solid var(--border)">' +
+    '<select class="form-select" id="mg-standort-sel" style="margin-bottom:8px">' + ortOpts + '</select>' +
+    '<div style="display:flex;gap:6px">' + filterHtml + '</div></div>' +
     '<div class="content">' + html + '</div>';
 }
 
@@ -1237,7 +1261,7 @@ function vQrCodes() {
       '</div>';
   }
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-dashboard" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">QR-Codes je Standort</div></div>' +
     '</div>' +
     '<div class="content"><div class="qr-grid">' + cardsHtml + '</div></div>';
@@ -1286,7 +1310,8 @@ function vInspection() {
         var floorCustomHtml = floorSelectVal === 'custom'
           ? '<input type="text" class="check-stockwerk-custom" value="' + stockwerk.replace(/"/g,'&quot;') + '" placeholder="z.B. 1.OG links" onblur="setCheckStockwerkText(\'' + item.id + '\', this.value)">'
           : '';
-        var stockwerkHtml = '<div class="check-stockwerk-row">' +
+        var zeigeStockwerk = status === 'mangel' || stockwerk || floorMode === 'custom' || (check.fotos && check.fotos.length);
+        var stockwerkHtml = !zeigeStockwerk ? '' : '<div class="check-stockwerk-row">' +
           '<select class="check-stockwerk-select" onchange="setCheckStockwerk(\'' + item.id + '\', this.value)">' + floorOptsHtml + '</select>' +
           floorCustomHtml +
           '</div>';
@@ -1330,7 +1355,9 @@ function vInspection() {
       '<span class="category-progress">' + catChecked + '/' + cat.items.length + '</span>' +
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="chevron' + (collapsed ? ' chevron-closed' : '') + '"><polyline points="6 9 12 15 18 9"/></svg>' +
       '</div>' +
-      (!collapsed ? '<div class="category-items">' + itemsHtml + '</div>' : '') +
+      (!collapsed ? '<div class="category-items">' + itemsHtml +
+        (catChecked < cat.items.length ? '<button class="btn-outline" style="width:100%;margin:8px 0 4px" data-action="cat-rest-ok" data-cat="' + cat.id + '">Übrige ' + (cat.items.length - catChecked) + ' als OK markieren</button>' : '') +
+        '</div>' : '') +
       '</div>';
   }
 
@@ -1374,6 +1401,8 @@ function vDefect() {
   for (var i = 0; i < maengel.length; i++) {
     if (maengel[i].id === S.currentDefectId) { m = maengel[i]; break; }
   }
+  // Neu angelegt (noch ohne Beschreibung) = noch nichts zu löschen, Abbrechen oben links genügt
+  var istGespeichert = !!(m && m.beschreibung);
   if (!m) m = { id: S.currentDefectId, checkId: S.currentDefectCheckId, checkName: S.currentDefectCheckName, beschreibung: '', dringlichkeit: 'mittel', zustaendig: '', frist: '', fotos: [] };
 
   var fotosHtml = '';
@@ -1393,10 +1422,12 @@ function vDefect() {
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
     '<div class="header-center">' +
     '<div class="header-title-sm">Mangel erfassen</div>' +
-    '<div class="header-sub" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (m.checkName || '') + '</div></div>' +
+    '<div class="header-sub" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + insp.standort + ' · ' + (insp.schnellmeldung ? 'Direktmeldung' : (m.checkName || '')) + '</div></div>' +
     '<button class="text-btn" data-action="save-defect">Speichern</button></div>' +
     '<div class="content">' +
     (m.uebernommen ? '<div class="card" style="background:var(--warn-bg);border-color:var(--warn-border);font-size:12px;color:var(--text)">Übernommen aus der letzten Begehung vom ' + fmtDate(m.uebernommenSeit) + ', dort noch nicht behoben. Weiterhin offen: Angaben bei Bedarf aktualisieren. Behoben: oben bei diesem Prüfpunkt auf "OK" oder "N.A." wechseln.</div>' : '') +
+    (insp.schnellmeldung ? '<div class="card" style="margin-bottom:12px"><div class="form-group" style="margin-bottom:0"><label class="form-label">Standort</label>' +
+      '<select class="form-select" onchange="setMeldungStandort(this.value)">' + LOCATIONS.map(function(l) { return '<option value="' + l + '"' + (l === insp.standort ? ' selected' : '') + '>' + l + '</option>'; }).join('') + '</select></div></div>' : '') +
     '<div class="card">' +
     '<div class="form-group"><label class="form-label">Beschreibung *</label>' +
     '<textarea class="form-textarea" id="d-beschr" placeholder="Was genau ist der Mangel?">' + (m.beschreibung || '') + '</textarea></div>' +
@@ -1420,7 +1451,7 @@ function vDefect() {
     '<div class="card">' +
     '<div class="form-label" style="margin-bottom:12px">Fotos</div>' +
     '<div class="photo-grid" id="photo-grid">' + fotosHtml + '</div></div>' +
-    '<button class="btn-danger" data-action="del-defect" style="margin-bottom:20px">Mangel entfernen</button>' +
+    (istGespeichert ? '<button class="btn-danger" data-action="del-defect" style="margin-bottom:20px">Mangel löschen</button>' : '') +
     '</div>';
 }
 
@@ -1483,6 +1514,7 @@ function vSchnellmangelErgebnis() {
     '<div style="font-size:11px;color:var(--text-light)">PDF vorher exportieren, ein automatischer Anhang an die E-Mail ist technisch nicht möglich.</div>' +
     '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Fertig</button>' +
+    '<button class="btn-danger" data-action="del-insp" data-id="' + insp.id + '" style="margin-top:14px">Meldung löschen</button>' +
     '</div></div>';
 }
 
@@ -1618,6 +1650,7 @@ function vSummary() {
     '</div></div>' +
     '<button class="btn-outline" data-action="edit-insp">Begehung nachbearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Neue Begehung</button>' +
+    '<button class="btn-danger" data-action="del-insp" data-id="' + insp.id + '" style="margin-top:14px">Begehung löschen</button>' +
     '</div></div>';
 }
 
@@ -1699,6 +1732,7 @@ function initSignatureCanvas() {
 
 /* ── SETTINGS ── */
 function vSettings() {
+  var tab = S.settingsTab || 'allgemein';
   var catsHtml = S.categories.map(function(cat) {
     return '<div class="category-item-settings">' +
       '<div class="category-item-settings-left">' +
@@ -1727,10 +1761,15 @@ function vSettings() {
   }
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Einstellungen</div></div>' +
     '<div style="width:36px"></div></div>' +
+    '<div style="padding:10px 12px;display:flex;gap:6px;background:var(--card);border-bottom:0.5px solid var(--border)">' +
+    [['allgemein', 'Allgemein'], ['server', 'Server'], ['daten', 'Daten']].map(function(t) {
+      return '<button class="filter-btn' + (tab === t[0] ? ' filter-btn-active' : '') + '" style="flex:1" data-action="settings-tab" data-tab="' + t[0] + '">' + t[1] + '</button>';
+    }).join('') + '</div>' +
     '<div class="content">' +
+    (tab === 'allgemein' ? '' +
     '<div class="card">' +
     '<div class="form-group"><label class="form-label">Standard-Begeher</label>' +
     '<input type="text" class="form-input" id="s-begeher" value="' + S.defaultBegeher + '"></div>' +
@@ -1753,6 +1792,8 @@ function vSettings() {
     '<span>Prüfkategorien</span>' +
     '<button class="btn-sm-outline" data-action="add-cat">+ Kategorie</button></div>' +
     catsHtml +
+    '' : '') +
+    (tab === 'server' ? '' +
     '<div class="section-header">Server-Sicherung</div>' +
     '<div class="card" style="margin-bottom:12px">' +
     '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Die App schickt ihre Daten nach jeder Änderung automatisch an den eigenen Server und gleicht sich darüber mit den anderen Geräten ab. Ohne Netz wird später nachgesendet. Adresse und Schlüssel gelten nur für dieses Gerät.</div>' +
@@ -1767,6 +1808,8 @@ function vSettings() {
     '</div>' +
     '<button class="btn-outline" style="width:100%;margin-top:8px" data-action="sync-now">Jetzt mit anderen Geräten abgleichen</button>' +
     '</div>' +
+    '' : '') +
+    (tab === 'daten' ? '' +
     '<div class="section-header">Export &amp; Datensicherung</div>' +
     '<div class="card" style="margin-bottom:12px">' +
     '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Vollständige Datensicherung aller App-Inhalte als JSON-Datei. Kann auf einem anderen Gerät oder nach einem Neustart wiederhergestellt werden.</div>' +
@@ -1793,11 +1836,32 @@ function vSettings() {
     '<div class="card" style="margin-bottom:12px">' +
     '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">Entfernt doppelte Anlagen, Verträge, Ansprechpartner und Aufgaben (alle Angaben gleich) sowie leere Platzhalter-Anlagen wie „Erding - Feuerlöscher“. Vor dem Löschen wird angezeigt, wie viele es sind.</div>' +
     '<button class="btn-outline" style="width:100%" data-action="daten-bereinigen">Daten bereinigen</button></div>' +
-    '<div style="margin-top:8px;padding-bottom:calc(20px + var(--safe-bottom))">' +
-    '<button class="btn-danger" data-action="reset-all">Alle Daten zurücksetzen</button></div></div>';
+    '<div class="section-header">Technik: Import / Export</div>' +
+    '<div class="card" style="margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">Anlagen</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn-sm-outline" data-action="csv-template-anlagen">Vorlage (.csv)</button>' +
+    '<button class="btn-sm-outline" data-action="csv-import-anlagen">Importieren</button>' +
+    '<button class="btn-sm-outline" data-action="csv-export-anlagen">Exportieren</button>' +
+    '</div>' +
+    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 10px">Wartungsverträge</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn-sm-outline" data-action="csv-template-vertraege">Vorlage (.csv)</button>' +
+    '<button class="btn-sm-outline" data-action="csv-import-vertraege">Importieren</button>' +
+    '<button class="btn-sm-outline" data-action="csv-export-vertraege">Exportieren</button>' +
+    '</div>' +
+    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 10px">Ansprechpartner</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn-sm-outline" data-action="csv-template-kontakte">Vorlage (.csv)</button>' +
+    '<button class="btn-sm-outline" data-action="csv-import-kontakte">Importieren</button>' +
+    '<button class="btn-sm-outline" data-action="csv-export-kontakte">Exportieren</button>' +
+    '</div></div>' +
+
+    '<div style="margin-top:24px">' +
+    '<button class="btn-danger" data-action="reset-all">Alle Daten zurücksetzen</button></div>' : '') +
+    '</div>';
 }
 
-/* ── SETTINGS CAT ── */
 function vSettingsCat() {
   var cat = null;
   for (var i = 0; i < S.categories.length; i++) {
@@ -1852,32 +1916,32 @@ function vHilfe() {
   }
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Hilfe &amp; Funktionen</div></div>' +
     '<div style="width:36px"></div></div>' +
     '<div class="content">' +
 
     '<div class="section-header">Startbildschirm</div>' +
     hSection('📋', 'Begehung starten',
-      'Standort, Datum und Begeher eintragen, dann "Begehung starten" tippen. Alle Prüfpunkte werden kategoriewise angezeigt. Jeden Punkt mit OK, Mangel oder N.A. bewerten. Beim Verlassen bleibt alles gespeichert.') +
+      'Standort wählen, dann "Begehung starten" tippen. Jeden Prüfpunkt mit OK, Mangel oder N.A. bewerten. "Übrige als OK markieren" setzt alle noch offenen Punkte eines Bereichs auf OK, fertige Bereiche klappen zu. Das Stockwerk erscheint, sobald ein Mangel gewählt ist. Beim Verlassen bleibt alles gespeichert, unfertige Begehungen stehen oben auf der Startseite unter "Begehung fortsetzen". Löschen: Begehung öffnen, ganz unten "Begehung löschen".') +
     hSection('⚠️', 'Hinweis-Banner',
       'Erscheint automatisch wenn eine Begehung oder Unterweisung überfällig oder in Kürze fällig ist. Gelb = demnächst fällig, Rot = überfällig. Intervalle werden in den Einstellungen je Standort festgelegt.') +
 
-    '<div class="section-header">Header-Icons (oben rechts)</div>' +
-    hSection('⊞', 'Standort-Übersicht (Dashboard)',
-      'Zeigt alle 10 Standorte mit Datum der letzten Begehung, Anzahl offener Mängel und Überfälligkeits-Status. Tippen auf einen Standort startet direkt eine neue Begehung für diesen Ort.') +
+    '<div class="section-header">Leiste unten</div>' +
+    hSection('⌂', 'Lage, Mängel, Termine, Mehr',
+      'Lage = Startseite mit Standort-Kacheln. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
     hSection('👥', 'Unterweisungen',
       'Brandschutzunterweisungen verwalten. Pro Standort Mitarbeiterliste pflegen, Unterweisungen erfassen und Nachweise als PDF exportieren. Die App zeigt automatisch an wenn die Jahresfrist (DGUV V2) abläuft.') +
     hSection('△', 'Offene Mängel',
-      'Zeigt alle nicht behobenen Mängel aus allen Begehungen standortübergreifend, sortiert nach Dringlichkeit. Mängel können hier direkt als behoben markiert werden.') +
+      'Zeigt alle nicht behobenen Mängel nach Standort gruppiert, überfällige zuerst. Wurde ein Mangel in eine neue Begehung übernommen, zählt nur der neueste Eintrag. Mängel können hier direkt als behoben markiert werden.') +
     hSection('?', 'Hilfe',
       'Diese Seite.') +
     hSection('🔧', 'Technik',
       'Anlagen (Feuerlöscher, BMA, BMZ, Notbeleuchtung usw.) mit Prüfdaten und Intervallen erfassen, Wartungsverträge mit Terminen verwalten und Ansprechpartner je Standort hinterlegen. Fällige Prüfungen und Termine erscheinen automatisch im Hinweis-Banner auf der Startseite.') +
     hSection('📅', 'Terminkalender',
-      'Zeigt alle fälligen Termine aus allen Modulen – Begehungen, Unterweisungen, Anlagen-Prüfungen, Wartungsverträge und Aufgaben – chronologisch in einer Liste. Filter: Überfällig / 30 Tage / 90 Tage / Alle. Monatsweise gruppiert. Erreichbar über das Kalender-Icon im Header.') +
+      'Zeigt alle fälligen Termine aus allen Modulen – Begehungen, Unterweisungen, Anlagen-Prüfungen, Wartungsverträge und Aufgaben – chronologisch in einer Liste. Filter: Überfällig / 30 Tage / 90 Tage / Alle. Monatsweise gruppiert. Erreichbar über „Termine“ in der Leiste unten.') +
     hSection('📊', 'Compliance-Matrix',
-      'Tabelle: alle 10 Standorte als Zeilen, Pflichtbereiche (Begehung, Unterweisung, Anlagen, Mängel) als Spalten. Ampelfarben auf einen Blick. Grün = in Ordnung, Gelb = bald fällig, Rot = überfällig oder kritisch, Grau = kein Eintrag. Erreichbar vom Dashboard über das Tabellen-Icon.') +
+      'Tabelle: alle 10 Standorte als Zeilen, Pflichtbereiche (Begehung, Unterweisung, Anlagen, Mängel) als Spalten. Ampelfarben auf einen Blick. Grün = in Ordnung, Gelb = bald fällig, Rot = überfällig oder kritisch, Grau = kein Eintrag. Zeile antippen öffnet den Standort. Erreichbar über Mehr.') +
     hSection('⚙', 'Einstellungen',
       'Standard-Begeher, E-Mail-Empfänger, Firmierung, Admin-PIN, Begehungsintervalle je Standort und Prüfkategorien anpassen. Kategorien und Prüfpunkte können vollständig selbst definiert werden.') +
 
@@ -1905,9 +1969,9 @@ function vHilfe() {
     hSection('🖨', 'Unterweisungsnachweis',
       'PDF mit Themenübersicht und Unterschriftstabelle für alle Teilnehmer. Rechtlich als Nachweis nach DGUV V2 verwendbar.') +
 
-    '<div class="section-header">Dashboard</div>' +
+    '<div class="section-header">QR-Codes</div>' +
     hSection('🔗', 'QR-Codes',
-      'Vom Dashboard oben rechts erreichbar. Zeigt einen QR-Code je Standort. Beim Scannen öffnet sich die App direkt mit dem passenden Standort vorausgewählt.') +
+      'Erreichbar über Mehr. Zeigt einen QR-Code je Standort. Beim Scannen öffnet sich die App direkt mit dem passenden Standort vorausgewählt.') +
 
     '<div class="section-header">Rechtliche Grundlagen</div>' +
     hSection('📚', 'Normen und Vorschriften',
@@ -1949,7 +2013,7 @@ function collectAllTermine() {
     var uwD = new Date(uwBase);
     uwD.setFullYear(uwD.getFullYear() + (lastUW ? 1 : 0));
     var uwFaellig = uwD.toISOString().split('T')[0];
-    termine.push({ datum: uwFaellig, typ: 'Unterweisung', beschreibung: 'Brandschutzunterweisung (DGUV V2)', standort: loc2, dl: uwDl });
+    termine.push({ datum: uwFaellig, typ: 'Unterweisung', beschreibung: 'Brandschutzunterweisung (DGUV V2)', standort: loc2, dl: uwDl, nie: !lastUW });
   }
 
   // Anlagen
@@ -2033,7 +2097,8 @@ function vTerminkalender() {
         lastMonth = monthKey;
       }
       var dlBadge = '';
-      if (t.dl < 0) dlBadge = '<span class="badge badge-crit">Überfällig ' + Math.abs(t.dl) + ' d</span>';
+      if (t.nie) dlBadge = '<span class="badge badge-crit">noch nie</span>';
+      else if (t.dl < 0) dlBadge = '<span class="badge badge-crit">Überfällig ' + Math.abs(t.dl) + ' d</span>';
       else if (t.dl === 0) dlBadge = '<span class="badge badge-crit">Heute fällig</span>';
       else if (t.dl <= 7) dlBadge = '<span class="badge badge-crit">in ' + t.dl + ' d</span>';
       else if (t.dl <= 30) dlBadge = '<span class="badge badge-warn">in ' + t.dl + ' d</span>';
@@ -2048,7 +2113,7 @@ function vTerminkalender() {
         (t.standort ? '<span style="font-size:11px;color:var(--text-light)">' + t.standort + '</span>' : '') +
         '</div>' +
         '<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + t.beschreibung + '</div>' +
-        '<div style="font-size:11px;color:var(--text-light);margin-top:1px">' + fmtDate(t.datum) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-light);margin-top:1px">' + (t.nie ? 'noch nicht erfasst' : fmtDate(t.datum)) + '</div>' +
         '</div>' +
         dlBadge +
         '</div>';
@@ -2070,7 +2135,7 @@ function vTerminkalender() {
 function vMatrix() {
   var cols = [
     { key: 'begehung',     label: 'Begehung' },
-    { key: 'unterweisung', label: 'Unterweisung' },
+    { key: 'unterweisung', label: 'Unterw.' },
     { key: 'anlagen',      label: 'Anlagen' },
     { key: 'maengel',      label: 'Mängel' }
   ];
@@ -2078,9 +2143,11 @@ function vMatrix() {
   function cellHtml(status, text) {
     var bg = status === 'ok' ? 'var(--ok-bg)' : status === 'warn' ? 'var(--warn-bg)' : status === 'crit' ? 'var(--crit-bg)' : 'var(--na-bg)';
     var color = status === 'ok' ? 'var(--ok)' : status === 'warn' ? 'var(--warn)' : status === 'crit' ? 'var(--crit)' : 'var(--na)';
-    return '<td style="padding:6px 8px;border-bottom:0.5px solid var(--border);text-align:center;background:' + bg + ';color:' + color + ';font-size:11px;font-weight:700;min-width:72px">' + text + '</td>';
+    return '<td style="padding:6px 3px;border-bottom:0.5px solid var(--border);text-align:center;background:' + bg + ';color:' + color + ';font-size:11px;font-weight:700">' + text + '</td>';
   }
+  function kurz(d) { return d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(2, 4) : ''; }
 
+  var alleOffen = offeneMaengelAlle();
   var rows = '';
   for (var li = 0; li < LOCATIONS.length; li++) {
     var loc = LOCATIONS[li];
@@ -2094,9 +2161,9 @@ function vMatrix() {
       bCell = intv > 0 ? 'Keine' : '–';
     } else {
       var bDays = intv > 0 ? intv - daysBetween(lastInsp.datum, today()) : 999;
-      if (bDays < 0) { bStatus = 'crit'; bCell = fmtDate(lastInsp.datum); }
-      else if (bDays <= 14) { bStatus = 'warn'; bCell = fmtDate(lastInsp.datum); }
-      else { bStatus = 'ok'; bCell = fmtDate(lastInsp.datum); }
+      if (bDays < 0) { bStatus = 'crit'; bCell = kurz(lastInsp.datum); }
+      else if (bDays <= 14) { bStatus = 'warn'; bCell = kurz(lastInsp.datum); }
+      else { bStatus = 'ok'; bCell = kurz(lastInsp.datum); }
     }
 
     // Unterweisung
@@ -2104,9 +2171,9 @@ function vMatrix() {
     var uwDl = uwDaysLeft(lastUW);
     var uwStatus, uwCell;
     if (!lastUW) { uwStatus = 'crit'; uwCell = 'Keine'; }
-    else if (uwDl < 0) { uwStatus = 'crit'; uwCell = fmtDate(lastUW.datum); }
-    else if (uwDl <= 30) { uwStatus = 'warn'; uwCell = fmtDate(lastUW.datum); }
-    else { uwStatus = 'ok'; uwCell = fmtDate(lastUW.datum); }
+    else if (uwDl < 0) { uwStatus = 'crit'; uwCell = kurz(lastUW.datum); }
+    else if (uwDl <= 30) { uwStatus = 'warn'; uwCell = kurz(lastUW.datum); }
+    else { uwStatus = 'ok'; uwCell = kurz(lastUW.datum); }
 
     // Anlagen
     var locAnlagen = S.anlagen.filter(function(a) { return a.standort === loc; });
@@ -2115,27 +2182,21 @@ function vMatrix() {
     else {
       var critAn = locAnlagen.filter(function(a) { return a.letztePruefung && a.intervallMonate && anlageDaysLeft(a) < 0; });
       var warnAn = locAnlagen.filter(function(a) { return a.letztePruefung && a.intervallMonate && anlageDaysLeft(a) >= 0 && anlageDaysLeft(a) <= 30; });
-      if (critAn.length > 0) { anlStatus = 'crit'; anlCell = critAn.length + ' überfällig'; }
-      else if (warnAn.length > 0) { anlStatus = 'warn'; anlCell = warnAn.length + ' bald fällig'; }
+      if (critAn.length > 0) { anlStatus = 'crit'; anlCell = critAn.length + ' überf.'; }
+      else if (warnAn.length > 0) { anlStatus = 'warn'; anlCell = warnAn.length + ' bald'; }
       else { anlStatus = 'ok'; anlCell = locAnlagen.length + ' OK'; }
     }
 
-    // Mängel
-    var locMaengel = [];
-    for (var ii = 0; ii < S.inspections.length; ii++) {
-      if (S.inspections[ii].standort === loc) {
-        var ms = (S.inspections[ii].maengel || []).filter(function(m) { return !m.behoben; });
-        locMaengel = locMaengel.concat(ms);
-      }
-    }
-    var krit = locMaengel.filter(function(m) { return m.dringlichkeit === 'kritisch'; });
+    // Mängel (gleiche Zählung wie Startseite und Standortseite)
+    var lb = lagebildStandort(loc, alleOffen);
     var mStatus, mCell;
-    if (krit.length > 0) { mStatus = 'crit'; mCell = krit.length + ' kritisch'; }
-    else if (locMaengel.length > 0) { mStatus = 'warn'; mCell = locMaengel.length + ' offen'; }
+    if (lb.ueber > 0) { mStatus = 'crit'; mCell = lb.ueber + ' überf.'; }
+    else if (lb.kritisch > 0) { mStatus = 'crit'; mCell = lb.kritisch + ' krit.'; }
+    else if (lb.offen > 0) { mStatus = 'warn'; mCell = lb.offen + ' offen'; }
     else { mStatus = 'ok'; mCell = 'OK'; }
 
-    rows += '<tr>' +
-      '<td style="padding:6px 10px;border-bottom:0.5px solid var(--border);font-size:12px;font-weight:700;white-space:nowrap;background:var(--card)">' + loc + '</td>' +
+    rows += '<tr data-action="go-standort" data-loc="' + loc + '" style="cursor:pointer">' +
+      '<td style="padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:12px;font-weight:700;background:var(--card)">' + loc + '</td>' +
       cellHtml(bStatus, bCell) +
       cellHtml(uwStatus, uwCell) +
       cellHtml(anlStatus, anlCell) +
@@ -2155,16 +2216,16 @@ function vMatrix() {
   }).join('');
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Compliance-Matrix</div>' +
-    '<div class="header-sub">Alle 10 Standorte auf einen Blick</div></div>' +
+    '<div class="header-sub">Zeile antippen für den Standort</div></div>' +
     '</div>' +
     '<div class="content">' +
     '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:0.5px solid var(--border);margin-bottom:12px">' +
-    '<table style="width:100%;border-collapse:collapse;background:var(--card);min-width:440px">' +
+    '<table style="width:100%;border-collapse:collapse;background:var(--card);table-layout:fixed">' +
     '<thead><tr>' +
-    '<th style="padding:8px 10px;background:var(--dark);color:#fff;font-size:11px;text-align:left;min-width:90px">Standort</th>' +
-    cols.map(function(c) { return '<th style="padding:8px 6px;background:var(--dark);color:#fff;font-size:11px;text-align:center;min-width:72px">' + c.label + '</th>'; }).join('') +
+    '<th style="padding:8px 10px;background:var(--dark);color:#fff;font-size:11px;text-align:left;width:28%">Standort</th>' +
+    cols.map(function(c) { return '<th style="padding:8px 6px;background:var(--dark);color:#fff;font-size:11px;text-align:center">' + c.label + '</th>'; }).join('') +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div style="display:flex;flex-wrap:wrap;gap:10px;padding:4px 0 8px">' + legend + '</div>' +
     '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
@@ -2180,12 +2241,10 @@ function aufgabeStatusColor(status) {
 }
 
 function vAufgaben() {
-  var filter = S.aufgabenFilter || 'alle';
-  var filterOpts = ['alle','Offen','In Bearbeitung','Dringend','Erledigt'];
+  var filter = S.aufgabenFilter || 'aktiv';
+  var filterOpts = [['aktiv', 'Offen'], ['Dringend', 'Dringend'], ['In Bearbeitung', 'In Bearbeitung'], ['Erledigt', 'Erledigt'], ['alle', 'Alle']];
   var filterHtml = filterOpts.map(function(f) {
-    var active = filter === f;
-    return '<button class="filter-btn' + (active ? ' filter-btn-active' : '') + '" data-action="aufgaben-filter" data-filter="' + f + '">' +
-      (f === 'alle' ? 'Alle' : f) + '</button>';
+    return '<button class="filter-btn' + (filter === f[0] ? ' filter-btn-active' : '') + '" data-action="aufgaben-filter" data-filter="' + f[0] + '">' + f[1] + '</button>';
   }).join('');
 
   var list = S.aufgaben.slice().sort(function(a, b) {
@@ -2195,59 +2254,53 @@ function vAufgaben() {
     if (a.frist && b.frist) return a.frist < b.frist ? -1 : 1;
     return 0;
   });
-  if (filter !== 'alle') list = list.filter(function(t) { return t.status === filter; });
+  if (filter === 'aktiv') list = list.filter(function(t) { return t.status !== 'Erledigt'; });
+  else if (filter !== 'alle') list = list.filter(function(t) { return t.status === filter; });
 
   var offenCount = S.aufgaben.filter(function(t) { return t.status !== 'Erledigt'; }).length;
+  var erledigtCount = S.aufgaben.length - offenCount;
 
   var listHtml = '';
   if (list.length === 0) {
-    listHtml = '<div class="card empty-state">Keine Aufgaben in dieser Kategorie.</div>';
+    listHtml = '<div class="card empty-state">Keine Aufgaben in dieser Auswahl.</div>';
   } else {
     for (var ti = 0; ti < list.length; ti++) {
       var t = list[ti];
       var sc = aufgabeStatusColor(t.status);
-      var dl = t.frist ? daysLeft(t.frist) : 9999;
+      var erledigt = t.status === 'Erledigt';
+      var dl = t.frist ? daysLeft(t.frist) : null;
       var fristBadge = '';
-      if (t.status !== 'Erledigt' && t.frist) {
+      if (!erledigt && t.frist) {
         if (dl < 0) fristBadge = '<span class="badge badge-crit">Überfällig ' + Math.abs(dl) + ' d</span>';
         else if (dl <= 7) fristBadge = '<span class="badge badge-crit">Fällig in ' + dl + ' d</span>';
         else if (dl <= 14) fristBadge = '<span class="badge badge-warn">Fällig in ' + dl + ' d</span>';
       }
-      listHtml += '<div class="card" style="margin-bottom:8px;padding:12px 14px;border-left:3px solid ' + sc.color + '">' +
-        '<div style="display:flex;align-items:flex-start;gap:8px">' +
+      var statusOpts = AUFGABEN_STATUS.map(function(st) { return '<option' + (st === t.status ? ' selected' : '') + '>' + st + '</option>'; }).join('');
+      listHtml += '<div class="card" style="margin-bottom:8px;padding:12px 14px;border-left:3px solid ' + sc.color + (erledigt ? ';opacity:0.6' : '') + '">' +
+        '<div style="display:flex;align-items:flex-start;gap:8px" data-action="aufgabe-edit" data-agid="' + t.id + '">' +
         '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:13px;font-weight:700;margin-bottom:3px">' + t.aufgabe + '</div>' +
-        '<div style="font-size:12px;color:var(--text-light)">' +
-        (t.zustaendig ? t.zustaendig : '') +
-        (t.frist ? ' &middot; Frist: ' + fmtDate(t.frist) : '') +
-        '</div>' +
-        (t.bemerkung ? '<div style="font-size:12px;color:var(--text-light);margin-top:3px">' + t.bemerkung + '</div>' : '') +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
-        '<span style="background:' + sc.bg + ';color:' + sc.color + ';border:1px solid ' + sc.border + ';border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap">' + t.status + '</span>' +
-        fristBadge +
-        '</div></div>' +
-        '<div style="display:flex;gap:8px;margin-top:10px">' +
-        AUFGABEN_STATUS.map(function(st) {
-          var act = st === t.status;
-          return '<button style="flex:1;background:' + (act ? aufgabeStatusColor(st).bg : 'var(--card)') + ';color:' + aufgabeStatusColor(st).color + ';border:1px solid ' + aufgabeStatusColor(st).border + ';border-radius:8px;padding:5px 2px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit' + (act ? ';font-weight:700' : '') + '" data-action="aufgabe-status" data-agid="' + t.id + '" data-status="' + st + '">' + st + '</button>';
-        }).join('') +
-        '<button style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12px;cursor:pointer;color:var(--text-light)" data-action="aufgabe-edit" data-agid="' + t.id + '">&#9998;</button>' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:3px' + (erledigt ? ';text-decoration:line-through' : '') + '">' + t.aufgabe + '</div>' +
+        '<div style="font-size:12px;color:var(--text-light)">' + (t.zustaendig ? t.zustaendig : '') + (t.frist ? ' &middot; Frist: ' + fmtDate(t.frist) : '') + '</div>' +
+        (t.bemerkung && !erledigt ? '<div style="font-size:12px;color:var(--text-light);margin-top:3px">' + t.bemerkung + '</div>' : '') +
+        '</div>' + fristBadge + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px;align-items:center">' +
+        '<select class="aufgabe-status-sel" data-agid="' + t.id + '" style="flex:1;background:' + sc.bg + ';color:' + sc.color + ';border:1px solid ' + sc.border + ';border-radius:8px;padding:6px 8px;font-size:12px;font-weight:700;font-family:inherit">' + statusOpts + '</select>' +
+        (!erledigt ? '<button class="btn-sm-ok" data-action="aufgabe-status" data-agid="' + t.id + '" data-status="Erledigt">&#10003; Erledigt</button>' : '') +
         '</div></div>';
     }
   }
+  if (filter === 'aktiv' && erledigtCount) {
+    listHtml += '<div class="lb-mehr" style="text-align:center;padding:10px" data-action="aufgaben-filter" data-filter="Erledigt">' + erledigtCount + ' erledigte anzeigen</div>';
+  }
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Aufgaben</div>' +
     '<div class="header-sub">' + offenCount + ' offen</div></div>' +
-    '<button class="icon-btn" data-action="csv-export-aufgaben" title="Als CSV exportieren">' +
-    '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
     '<button class="text-btn" data-action="aufgabe-neu">+ Neu</button>' +
     '</div>' +
     '<div style="padding:10px 12px 4px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);border-bottom:0.5px solid var(--border)">' + filterHtml + '</div>' +
-    '<div class="content" style="padding-top:10px">' + listHtml +
-    '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+    '<div class="content" style="padding-top:10px">' + listHtml + '</div>';
 }
 
 function vAufgabeForm() {
@@ -2337,7 +2390,7 @@ function vVorschlaege() {
     }).join('') + '</div>';
   }
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Vorschläge</div>' +
     '<div class="header-sub">aus dem Mail-Eingang</div></div>' +
     '</div>' +
@@ -2492,7 +2545,7 @@ function vTechnik() {
   }
 
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Technik</div></div>' +
     '</div>' +
     '<div class="content">' +
@@ -2514,27 +2567,7 @@ function vTechnik() {
     '<button class="btn-sm-outline" data-action="technik-kontakt-neu">+ Neu</button></div>' +
     '<div style="margin-bottom:12px">' + kontakteHtml + '</div>' +
 
-    '<div class="section-header">Import / Export</div>' +
-    '<div class="card" style="margin-bottom:12px">' +
-    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">Anlagen</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn-sm-outline" data-action="csv-template-anlagen">Vorlage (.csv)</button>' +
-    '<button class="btn-sm-outline" data-action="csv-import-anlagen">Importieren</button>' +
-    '<button class="btn-sm-outline" data-action="csv-export-anlagen">Exportieren</button>' +
-    '</div>' +
-    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 10px">Wartungsverträge</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn-sm-outline" data-action="csv-template-vertraege">Vorlage (.csv)</button>' +
-    '<button class="btn-sm-outline" data-action="csv-import-vertraege">Importieren</button>' +
-    '<button class="btn-sm-outline" data-action="csv-export-vertraege">Exportieren</button>' +
-    '</div>' +
-    '<div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 10px">Ansprechpartner</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn-sm-outline" data-action="csv-template-kontakte">Vorlage (.csv)</button>' +
-    '<button class="btn-sm-outline" data-action="csv-import-kontakte">Importieren</button>' +
-    '<button class="btn-sm-outline" data-action="csv-export-kontakte">Exportieren</button>' +
-    '</div></div>' +
-
+    '<div style="font-size:12px;color:var(--text-light);text-align:center;padding:4px 0 8px">Import und Export: Mehr → Einstellungen → Daten</div>' +
     '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div>' +
     '</div>';
 }
@@ -3311,6 +3344,14 @@ function importKontakteCSV(rows) {
 }
 
 /* ── STANDORT IN BEGEHUNG ÄNDERN ── */
+// Direktmeldung: Standort ändern, ohne neu zu zeichnen (Eingaben bleiben stehen), gespeichert wird mit "Speichern"
+function setMeldungStandort(val) {
+  if (!S.currentInspection || !val) return;
+  S.currentInspection.standort = val;
+  S.lastStandort = val;
+  var sub = document.querySelector('.header .header-sub');
+  if (sub) sub.textContent = val + ' · Direktmeldung';
+}
 function changeInspStandort(val) {
   if (!S.currentInspection || !val) return;
   S.currentInspection.standort = val;
@@ -3706,7 +3747,7 @@ function vUnterweisungen() {
       '</div>';
   }
   return '<div class="header header-dark">' +
-    '<button class="icon-btn" data-action="go-home" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
     '<div class="header-center"><div class="header-title-sm">Brandschutzunterweisungen</div>' +
     '<div class="header-sub">DGUV V2 &middot; jährliche Pflicht</div></div>' +
     '</div>' +
@@ -3868,19 +3909,6 @@ function vUWDetail() {
     '</div></div>';
 }
 
-/* ── MEHR-MENU TOGGLE ── */
-document.addEventListener('click', function(e) {
-  var menu = document.getElementById('mehr-menu');
-  var btn = document.getElementById('mehr-btn');
-  if (!menu) return;
-  if (btn && (btn === e.target || btn.contains(e.target))) {
-    e.stopPropagation();
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    return;
-  }
-  menu.style.display = 'none';
-}, true);
-
 /* ── EVENT HANDLERS ── */
 document.addEventListener('click', function(e) {
   var el = e.target.closest('[data-action]');
@@ -3890,11 +3918,14 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-settings') { nav('settings'); return; }
   if (a.action === 'go-home') { nav('home'); return; }
   if (a.action === 'go-hilfe') { nav('hilfe'); return; }
-  if (a.action === 'go-dashboard') { nav('dashboard'); return; }
+  if (a.action === 'go-dashboard') { nav('home'); return; }
+  if (a.action === 'go-mehr') { nav('mehr'); return; }
+  if (a.action === 'settings-tab') { S.settingsTab = a.tab; render(); return; }
+  if (a.action === 'mg-filter') { S.mgFilter = a.filter; render(); return; }
   if (a.action === 'go-maengel-global') { nav('maengel-global'); return; }
   if (a.action === 'go-qr') { nav('qr-codes'); return; }
   if (a.action === 'go-unterweisungen') { nav('unterweisungen'); return; }
-  if (a.action === 'go-technik') { if (a.loc) S.technikStandort = a.loc; nav('technik'); return; }
+  if (a.action === 'go-technik') { S.technikStandort = a.loc || S.lastStandort || S.technikStandort; nav('technik'); return; }
   if (a.action === 'go-vorschlaege') { nav('vorschlaege'); return; }
   if (a.action === 'go-standort') { S.standortAnsicht = a.loc || S.lastStandort; S.lastStandort = S.standortAnsicht; nav('standort'); return; }
   if (a.action === 'heute-alle') { S.heuteAlle = !S.heuteAlle; render(); return; }
@@ -4174,11 +4205,12 @@ document.addEventListener('click', function(e) {
       if (entered === null) return;
       if (entered !== S.adminPin) { alert('Falscher PIN. Begehung wurde nicht gelöscht.'); return; }
     } else {
-      if (!confirm('Begehung löschen?')) return;
+      if (!confirm('Wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
     }
     S.inspections = S.inspections.filter(function(i) { return i.id !== a.id; });
     photoDbDelete(a.id);
-    save(); render();
+    S.currentInspection = null;
+    save(); nav('home');
     return;
   }
 
@@ -4222,7 +4254,7 @@ document.addEventListener('click', function(e) {
         uebernommen: true, uebernommenSeit: offeneVorher[ov].datum
       });
     }
-    S.collapsedCats = {};
+    S.collapsedCats = fertigeBereiche(S.currentInspection);
     save(); nav('inspection'); return;
   }
 
@@ -4257,6 +4289,19 @@ document.addEventListener('click', function(e) {
       saveInsp(); nav('home');
     }
     return;
+  }
+
+  if (a.action === 'cat-rest-ok') {
+    S.categories.forEach(function(c) {
+      if (c.id !== a.cat) return;
+      c.items.forEach(function(it) {
+        var ch = S.currentInspection.checks[it.id];
+        if (!ch) ch = S.currentInspection.checks[it.id] = {};
+        if (!ch.status) ch.status = 'ok';
+      });
+    });
+    S.collapsedCats[a.cat] = true;
+    saveInsp(); render(); return;
   }
 
   if (a.action === 'toggle-cat') {
@@ -4443,7 +4488,13 @@ document.addEventListener('click', function(e) {
     return;
   }
 
-  if (a.action === 'edit-insp') { nav('inspection'); return; }
+  if (a.action === 'edit-insp') { S.collapsedCats = fertigeBereiche(S.currentInspection); nav('inspection'); return; }
+  if (a.action === 'insp-fortsetzen') {
+    for (var fi = 0; fi < S.inspections.length; fi++) {
+      if (S.inspections[fi].id === a.id) { S.currentInspection = S.inspections[fi]; S.collapsedCats = fertigeBereiche(S.currentInspection); nav('inspection'); break; }
+    }
+    return;
+  }
   if (a.action === 'finish-insp') { saveInsp(); backupBegehungen(); nav('summary'); return; }
   if (a.action === 'export') { doExport(); return; }
   if (a.action === 'do-csv') { doCSV(); return; }
@@ -4543,7 +4594,8 @@ document.addEventListener('click', function(e) {
   }
 
   if (a.action === 'reset-all') {
-    if (confirm('Alle gespeicherten Daten und Einstellungen löschen?')) {
+    if (confirm('Alle gespeicherten Daten und Einstellungen auf diesem Gerät löschen?') &&
+        confirm('Sicher? Dieser Schritt lässt sich nicht rückgängig machen.')) {
       localStorage.removeItem('bs2_cats'); localStorage.removeItem('bs2_insps');
       localStorage.removeItem('bs2_begeher'); localStorage.removeItem('bs2_standort');
       localStorage.removeItem('bs2_email'); localStorage.removeItem('bs2_intervalle');
@@ -4562,8 +4614,16 @@ document.addEventListener('change', function(e) {
     S.intervalle[e.target.dataset.loc] = e.target.value;
     save();
   }
+  if (e.target.classList.contains('aufgabe-status-sel')) {
+    for (var asi = 0; asi < S.aufgaben.length; asi++) {
+      if (S.aufgaben[asi].id === e.target.dataset.agid) { S.aufgaben[asi].status = e.target.value; break; }
+    }
+    save(); render();
+  }
+  if (e.target.id === 'mg-standort-sel') { S.mgStandort = e.target.value; render(); }
   if (e.target.id === 'technik-standort-sel') {
     S.technikStandort = e.target.value;
+    S.lastStandort = e.target.value;
     render();
   }
 });
