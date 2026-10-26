@@ -495,14 +495,37 @@ function extractPhotos(insp) {
   return photoData;
 }
 
+// Flache Kopien statt JSON-Vollkopie: die Fotos (zusammen viele MB) werden dabei nicht mitkopiert
 function stripPhotosForStorage(inspections) {
   return inspections.map(function(insp) {
-    var copy = JSON.parse(JSON.stringify(insp));
-    var checks = copy.checks || {};
-    Object.keys(checks).forEach(function(cid) { if (checks[cid] && checks[cid].fotos) checks[cid].fotos = []; });
-    (copy.maengel || []).forEach(function(m) { if (m.fotos) m.fotos = []; });
+    var copy = Object.assign({}, insp);
+    if (insp.checks) {
+      copy.checks = {};
+      Object.keys(insp.checks).forEach(function(cid) {
+        var ch = insp.checks[cid];
+        copy.checks[cid] = (ch && ch.fotos) ? Object.assign({}, ch, { fotos: [] }) : ch;
+      });
+    }
+    if (insp.maengel) {
+      copy.maengel = insp.maengel.map(function(m) { return (m && m.fotos) ? Object.assign({}, m, { fotos: [] }) : m; });
+    }
     return copy;
   });
+}
+
+/* Kurzer Fingerabdruck der Fotos einer Begehung (Länge und Ende je Foto). save() schreibt
+   nur Begehungen in IndexedDB, deren Fotos sich seit dem letzten Schreiben geändert haben. */
+var photoSigs = {};
+function photoSig(pd) {
+  var teile = [];
+  ['checks', 'maengel'].forEach(function(art) {
+    Object.keys(pd[art]).sort().forEach(function(k) {
+      teile.push(art + ':' + k + '=' + pd[art][k].map(function(f) {
+        return typeof f === 'string' ? f.length + '~' + f.slice(-40) : '?';
+      }).join(','));
+    });
+  });
+  return teile.join('|');
 }
 
 function injectPhotos(inspections, photoMap) {
@@ -526,6 +549,8 @@ function loadPhotosAsync() {
   return photoDbGetAll().then(function(photoMap) {
     injectPhotos(S.inspections, photoMap);
     if (S.currentInspection) injectPhotos([S.currentInspection], photoMap);
+    // Stand nach dem Laden merken, damit das erste Speichern nicht alle Fotos neu schreibt
+    S.inspections.forEach(function(insp) { photoSigs[insp.id] = photoSig(extractPhotos(insp)); });
   }).catch(function(e) { console.warn('Fotos laden fehlgeschlagen', e); });
 }
 
@@ -554,12 +579,15 @@ function save() {
   } catch(e) { console.warn('Storage full', e); }
   syncTrack();
   scheduleServerBackup();
-  // Fotos getrennt und asynchron in IndexedDB sichern (blockiert die UI nicht)
+  // Fotos getrennt und asynchron in IndexedDB sichern, nur geänderte Begehungen.
+  // Erst nach dem Nachladen, sonst sähe die App noch keine Fotos und würde sie löschen.
+  if (!S.photosLoaded) return;
   S.inspections.forEach(function(insp) {
     var pd = extractPhotos(insp);
-    if (Object.keys(pd.checks).length || Object.keys(pd.maengel).length) {
-      photoDbPut(insp.id, pd);
-    }
+    var sig = photoSig(pd);
+    if (photoSigs[insp.id] === sig) return;
+    photoSigs[insp.id] = sig;
+    if (sig) photoDbPut(insp.id, pd); else photoDbDelete(insp.id);
   });
 }
 
@@ -1331,7 +1359,7 @@ function vInspection() {
           if (check.fotos && check.fotos.length) {
             extraHtml += '<div class="check-photos-row">';
             for (var fp2 = 0; fp2 < check.fotos.length; fp2++) {
-              extraHtml += '<div class="check-photo-cell"><img class="check-photo-thumb" src="' + check.fotos[fp2] + '" alt="Foto">' +
+              extraHtml += '<div class="check-photo-cell"><img class="check-photo-thumb" src="' + fotoSrc(check.fotos[fp2]) + '" alt="Foto">' +
                 '<select class="check-stockwerk-select check-photo-floor" onchange="setFotoStockwerk(\'' + item.id + '\', ' + fp2 + ', this.value)">' +
                 fotoFloorOptions(fotoStockwerk(check, fp2)) + '</select></div>';
             }
@@ -1409,7 +1437,7 @@ function vDefect() {
   var fotos = m.fotos || [];
   for (var f = 0; f < fotos.length; f++) {
     fotosHtml += '<div class="photo-thumb-wrapper">' +
-      '<img class="photo-thumb" src="' + fotos[f] + '" alt="Foto ' + (f+1) + '">' +
+      '<img class="photo-thumb" src="' + fotoSrc(fotos[f]) + '" alt="Foto ' + (f+1) + '">' +
       '<button class="photo-delete" data-action="del-photo" data-idx="' + f + '">&times;</button>' +
       '<input type="text" class="photo-text-input" placeholder="Ort/Stockwerk" value="' + escH(mangelFotoText(m, f)) + '" onchange="setMangelFotoText(' + f + ', this.value)">' +
       '</div>';
@@ -2989,21 +3017,31 @@ function srvHash(str) {
 function scheduleServerBackup() {
   if (!srvConfigured() || !S.photosLoaded) return;
   try { localStorage.setItem('bs2_srv_pending', '1'); } catch(e) {}
-  clearTimeout(srvTimer);
-  srvTimer = setTimeout(function() { serverBackupNow(false); }, 30000);
+  // Die Voll-Sicherung ist groß (alle Fotos). Einzelne Änderungen gehen ohnehin binnen Sekunden
+  // über den Abgleich an den Server, daher reicht sie alle 10 Minuten und beim Verlassen der App.
+  if (srvTimer) return;
+  srvTimer = setTimeout(function() { srvTimer = null; serverBackupNow(false); }, 10 * 60000);
+}
+
+// Kurzer Fingerabdruck der Sicherung: lange Texte (Fotos) nur über Länge und Ende, wie beim Abgleich
+function srvBackupSig(data) {
+  return srvHash(JSON.stringify(data, function(k, v) {
+    return (typeof v === 'string' && v.length > 2000) ? 'P' + v.length + ':' + v.slice(-40) : v;
+  }));
 }
 
 function serverBackupNow(manual) {
-  clearTimeout(srvTimer);
+  clearTimeout(srvTimer); srvTimer = null;
   if (!srvConfigured()) { if (manual) alert('Bitte zuerst Server-Adresse und Schlüssel eintragen.'); return Promise.resolve(); }
-  if (!S.photosLoaded) { srvTimer = setTimeout(function() { serverBackupNow(manual); }, 3000); return Promise.resolve(); }
+  if (!S.photosLoaded) { srvTimer = setTimeout(function() { srvTimer = null; serverBackupNow(manual); }, 3000); return Promise.resolve(); }
   if (srvBusy) { srvAgain = true; return Promise.resolve(); }
-  var json = JSON.stringify(buildBackupData());
-  var hash = srvHash(json);
+  var daten = buildBackupData();
+  var hash = srvBackupSig(daten);
   if (!manual && hash === localStorage.getItem('bs2_srv_hash')) {
     try { localStorage.removeItem('bs2_srv_pending'); } catch(e) {}
     return Promise.resolve();
   }
+  var json = JSON.stringify(daten);
   srvBusy = true;
   return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/backup', {
     method: 'POST',
@@ -3215,6 +3253,20 @@ function syncNow(manual) {
   });
 }
 
+/* Neuzeichnen nach dem Abgleich erst, wenn gerade niemand tippt oder schreibt. Sonst wird die
+   Seite zwischen Antippen und Loslassen ersetzt und der Fingertipp geht verloren. */
+var letzteBeruehrung = 0, ruhigTimer = null;
+['touchstart', 'pointerdown', 'keydown', 'scroll'].forEach(function(ev) {
+  document.addEventListener(ev, function() { letzteBeruehrung = Date.now(); }, { passive: true, capture: true });
+});
+function renderWennRuhig() {
+  clearTimeout(ruhigTimer);
+  var el = document.activeElement;
+  var schreibt = el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+  if (schreibt || Date.now() - letzteBeruehrung < 2000) { ruhigTimer = setTimeout(renderWennRuhig, 1500); return; }
+  render();
+}
+
 // Übernimmt Einträge vom Server in die App, außer hier gibt es eine neuere, noch nicht gesendete Fassung
 function syncAnwenden(liste) {
   var meta = syncMetaLaden() || (syncMeta = {});
@@ -3255,10 +3307,9 @@ function syncAnwenden(liste) {
   });
   if (n) {
     // Fotos liegen getrennt in IndexedDB: Begehungen ohne Fotos dort ebenfalls leeren
-    ohneFotos.forEach(function(id) { photoDbDelete(id); });
+    ohneFotos.forEach(function(id) { photoDbDelete(id); photoSigs[id] = ''; });
     save();
-    var el = document.activeElement;
-    if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) render();
+    renderWennRuhig();
   }
   return n;
 }
@@ -3394,13 +3445,31 @@ function setCheckStockwerkText(iid, val) {
   saveInsp();
   render();
 }
+/* Fotos in der Ansicht als kurze blob:-Adresse statt als langer data:-Text. Jedes Neuzeichnen
+   muss dann nicht mehr mehrere MB HTML verarbeiten, und Safari kann das dekodierte Bild weiterverwenden.
+   Gespeichert, gesichert und ins PDF übernommen wird weiterhin der data:-Text. */
+var fotoUrlCache = new Map();
+function fotoSrc(f) {
+  if (typeof f !== 'string' || f.indexOf('data:') !== 0 || !window.URL || !URL.createObjectURL) return f;
+  var u = fotoUrlCache.get(f);
+  if (u) return u;
+  var komma = f.indexOf(','), kopf = f.slice(5, komma);
+  if (komma < 0 || kopf.indexOf(';base64') === -1) return f;
+  try {
+    var bin = atob(f.slice(komma + 1)), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    u = URL.createObjectURL(new Blob([arr], { type: kopf.split(';')[0] || 'image/jpeg' }));
+  } catch(e) { return f; }
+  fotoUrlCache.set(f, u);
+  return u;
+}
 /* Beschriftung je Foto eines Mangels (Ort, Stockwerk, vorher/nachher): m.fotoTexte läuft parallel zu m.fotos. */
 function mangelFotoText(m, i) {
   return (m.fotoTexte && m.fotoTexte[i]) || '';
 }
 function mangelFotoVorschau(m, i) {
   var t = mangelFotoText(m, i);
-  var img = '<img class="photo-preview-thumb" src="' + m.fotos[i] + '" alt="Foto">';
+  var img = '<img class="photo-preview-thumb" src="' + fotoSrc(m.fotos[i]) + '" alt="Foto">';
   return t ? '<div class="photo-preview-cell">' + img + '<div class="photo-preview-text">' + escH(t) + '</div></div>' : img;
 }
 function setMangelFotoText(idx, val) {
@@ -4208,7 +4277,7 @@ document.addEventListener('click', function(e) {
       if (!confirm('Wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
     }
     S.inspections = S.inspections.filter(function(i) { return i.id !== a.id; });
-    photoDbDelete(a.id);
+    photoDbDelete(a.id); delete photoSigs[a.id];
     S.currentInspection = null;
     save(); nav('home');
     return;
@@ -5221,7 +5290,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     // iOS hält Zeitgeber im Hintergrund an: beim Verlassen sofort senden, beim Zurückkommen Vorgemerktes nachholen
     document.addEventListener('visibilitychange', function() {
-      if (localStorage.getItem('bs2_srv_pending')) serverBackupNow(false);
+      // Beim Verlassen sofort sichern, beim Zurückkommen erst nach einer Minute, damit die App gleich bedienbar ist
+      if (localStorage.getItem('bs2_srv_pending')) {
+        if (document.visibilityState === 'hidden') serverBackupNow(false);
+        else { clearTimeout(srvTimer); srvTimer = setTimeout(function() { srvTimer = null; serverBackupNow(false); }, 60000); }
+      }
       if (document.visibilityState === 'visible' || syncOffen()) syncNow(false);
     });
     // Abgleich: beim Start und danach jede Minute, solange die App sichtbar ist
