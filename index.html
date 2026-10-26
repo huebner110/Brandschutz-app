@@ -719,12 +719,23 @@ function inspCounts(insp) {
   };
 }
 
+/* Eine Begehung gilt als fertig, wenn sie unterschrieben ist oder alle Prüfpunkte bewertet sind.
+   Nur fertige Begehungen zählen als "letzte Begehung" und bestimmen die nächste Fälligkeit;
+   angefangene erscheinen auf der Startseite unter "Begehung fortsetzen". */
+function inspFertig(insp) {
+  if (insp.unterschrift) return true;
+  var checks = insp.checks || {}, gesamt = 0, bewertet = 0;
+  S.categories.forEach(function(c) {
+    c.items.forEach(function(it) { gesamt++; if (checks[it.id] && checks[it.id].status) bewertet++; });
+  });
+  return gesamt > 0 && bewertet >= gesamt;
+}
+
+// Letzte fertige Begehung eines Standorts (nach Datum)
 function lastInspForStandort(standort) {
-  var found = null;
-  for (var i = S.inspections.length - 1; i >= 0; i--) {
-    if (S.inspections[i].standort === standort && !S.inspections[i].schnellmeldung) { found = S.inspections[i]; break; }
-  }
-  return found;
+  return S.inspections.filter(function(i) {
+    return i.standort === standort && !i.schnellmeldung && inspFertig(i);
+  }).sort(nachDatumAbsteigend)[0] || null;
 }
 
 function centerleiterEmailFor(standort) {
@@ -960,9 +971,7 @@ function fertigeBereiche(insp) {
 // Je Standort die letzte Begehung, wenn sie noch nicht vollständig ist
 function unfertigeBegehungen() {
   return LOCATIONS.map(lastInspForStandortNachDatum).filter(function(i) {
-    if (!i) return false;
-    var c = inspCounts(i);
-    return c.total < c.totalItems;
+    return i && !inspFertig(i);
   }).sort(nachDatumAbsteigend);
 }
 
