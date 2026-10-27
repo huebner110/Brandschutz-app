@@ -411,8 +411,11 @@ var S = {
 
 var pendingPostRender = null;
 
+// body + soul Logo (dunkle Schrift, aus 00_Vorlagen/Branding), fest eingebettet: braucht kein Internet und keine fremde Adresse
+var LOGO_SRC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAhoAAABjCAYAAADdC6kGAAAWfmNhQlgAABZ+anVtYgAAAB5qdW1kYzJwYQARABCAAACqADibcQNjMnBhAAAAFlhqdW1iAAAAR2p1bWRjMm1hABEAEIAAAKoAOJtxA3VybjpjMnBhOmE2ODJmMjkxLTFiOGMtNDA0MS05MTBiLWZmMjFlMDFiNDA5NgAAAAOTanVtYgAAAClqdW1kYzJhcwARABCAAACqADibcQNjMnBhLmFzc2VydGlvbnMAAAAAuGp1bWIAAABEanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5pbmdyZWRpZW50LnYzAAAAABhjMnNo1pKHu/xctFMU2D+78BIuzwAAAGxjYm9yo2lkYzpmb3JtYXRpaW1hZ2UvcG5namluc3RhbmNlSUR4LHhtcDppaWQ6MGZmOWVhODUtYjU5ZS00YmNkLTk5ZWEtZDFhY2ViNmM1NzM4bHJlbGF0aW9uc2hpcGhwYXJlbnRPZgAAAeJqdW1iAAAAQWp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuYWN0aW9ucy52MgAAAAAYYzJzaPXrZdedQvVgvPXd4Ie9giYAAAGZY2JvcqJnYWN0aW9uc4KiZmFjdGlvbmtjMnBhLm9wZW5lZGpwYXJhbWV0ZXJzoWtpbmdyZWRpZW50c4GiY3VybHgtc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5pbmdyZWRpZW50LnYzZGhhc2hYIOOI8ESnGnUZkV9xcM0h2a98XbCTKkauscklwOpcgimOpGZhY3Rpb254HWNvbS5hbnRocm9waWMuY2xhdWRlLnByb3ZpZGVkanBhcmFtZXRlcnOheB9jb20uYW50aHJvcGljLm9yaWdpbi1jb25maWRlbmNlZ3Vua25vd25rZGVzY3JpcHRpb254ZkNsYXVkZSBwcm92aWRlZCB0aGlzIGZpbGUgYXQgdGhlIHJlcXVlc3Qgb2YgYSB1c2VyIGFuZCBtYXkgaGF2ZSBjcmVhdGVkIG9yIG1vZGlmaWVkIHRoZSBmaWxlIGNvbnRlbnRzLm1zb2Z0d2FyZUFnZW50oWRuYW1lZkNsYXVkZXJhbGxBY3Rpb25zSW5jbHVkZWT1AAAAyGp1bWIAAABAanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5oYXNoLmRhdGEAAAAAGGMyc2hZb/69NpGHcx8+tafyPW8aAAAAgGNib3KlY2FsZ2ZzaGEyNTZjcGFkTQAAAAAAAAAAAAAAAABkaGFzaFgg4EUszRds/u0CFljQ06BiqQqB4B2Cy54KjF2MK+esdtJkbmFtZW5qdW1iZiBtYW5pZmVzdGpleGNsdXNpb25zgaJlc3RhcnQYIWZsZW5ndGgZFooAAAI+anVtYgAAACdqdW1kYzJjbAARABCAAACqADibcQNjMnBhLmNsYWltLnYyAAAAAg9jYm9ypWNhbGdmc2hhMjU2aXNpZ25hdHVyZXhNc2VsZiNqdW1iZj0vYzJwYS91cm46YzJwYTphNjgyZjI5MS0xYjhjLTQwNDEtOTEwYi1mZjIxZTAxYjQwOTYvYzJwYS5zaWduYXR1cmVqaW5zdGFuY2VJRHgseG1wOmlpZDo4MGYxMzJmOC1iZjYyLTQzNGMtYTgwNy00Yzk5OTJjYWNhYThyY3JlYXRlZF9hc3NlcnRpb25zg6JjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFgg44jwRKcadRmRX3FwzSHZr3xdsJMqRq6xySXA6lyCKY6iY3VybHgqc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5hY3Rpb25zLnYyZGhhc2hYIH81JN9uIyvGcE7f5rhqSFOCwKIMc3tpJ6Q27runOUztomN1cmx4KXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaGFzaC5kYXRhZGhhc2hYIARg3DAP0Wo2ZyLdPbcDImMgu37vjkxb7wr3qIDvLB4YdGNsYWltX2dlbmVyYXRvcl9pbmZvo2RuYW1lb0FudGhyb3BpYyBGaWxlc2d2ZXJzaW9uZTEuMC4wa3NwZWNWZXJzaW9uZTIuNC4wAAAQOGp1bWIAAAAoanVtZGMyY3MAEQAQgAAAqgA4m3EDYzJwYS5zaWduYXR1cmUAAAAQCGNib3LShFkCEqIBJhghWQIKMIICBjCCAY2gAwIBAgIUQOWgCu7COdC+uIP6BkIFPWdVEwAwCgYIKoZIzj0EAwMwSTEXMBUGA1UEChMOQW50aHJvcGljLCBQQkMxLjAsBgNVBAMTJUFudGhyb3BpYyBDb250ZW50IENyZWRlbnRpYWxzIFJvb3QgQ0EwHhcNMjYwODA3MTg0MzU2WhcNMjgwODA2MTk0MzU2WjBEMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEpMCcGA1UEAxMgQW50aHJvcGljIENsYXVkZSBDb250ZW50IFNpZ25pbmcwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASYegpry1AYBRTVNL1CpTlbROnY3dey+UrsF9C3phYrATN3ZHf93Mo8RQN0KOUuOn19P4oWNFWe5n2/She9N7eTo1gwVjAOBgNVHQ8BAf8EBAMCB4AwFQYDVR0lBA4wDAYKKwYBBAGD6F4CATAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFM5R4gSBTmRbI/jjxM+aPpzB11zCMAoGCCqGSM49BAMDA2cAMGQCMDFzHRSeAXrSy1WOzkbhPZ6Km2wGTmZ/2gK18k8BQGXyqz88Rdrz6CTX9flAnYNVxgIwcF9c3fVhqmJKpi+UhasNUMko69cyX6STPfta3Q8EjyzDjzoyrol46FP6VFHhvUcJoWNwYWRZDZ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2WEDhvhbG3ZKEMeTLhpcO43oRtFMXLXkTJa38rOgNq/QL5O6FBNGeWSbSEDNo8qXCOWiWFY3WV8ZLLIXDg7CYeERsO5TXGgAAGWRJREFUeJzt3XuUHGWZx/FvMhOSiWAgkZtsBAF3gzwY3eAtsBAwQcISuSkJK5ddxD0LHsJNw3pWRUVQwk1gJeghHkOCBLyAgoKQNYAmsAKHBR4luOEaAhJNFgzkOgn7x/s2011dM5mZruqqnvw+5+R0qrun3rfr8tZT76XeQWa2L/CPdFkHXO/ua5CtjpmNAj5T9VYncJ2OBxFphJlNBf4eWA8MBe5x9wVNSns0MLsZaUmdB9uBg4BLEh/cCOjCsnX6G+qPhx+h40FEGnM6cHDVcgfQlEAD2AmY1KS0pNYug4E3Em+uJdzFytZpQ2JZx4KIZOGVxPKrTUx7XRPTklrLB6e8uanp2RAREZEBqb3oDIiIiBSgk1DT0VZ0RgaITYRt2ZH8QIGGiIhsjRYA/woMKTojA8RG4BBgTvIDBRoiIrI1+ou7Lys6EwOJmf0+7f20PhoiIiIDXV0VvzRsh7Q3FWiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG4UaIiIiEhuFGiIiIhIbhRoiIiISG5SAw13f63ZGZHSeL7oDIiIyMDRnvLeMDObDaxvdmaApcB97v5IX//QzIYDHwMOBLbLOmN9tAT4L3f/fX/+2MzGA4cAu2Waq94ZtaUvmNklwDur3vp2f/ZZ3sxsOvDBqrducffbi8pPK4rH4oHAHgVnZTXwHPC7Fi8fOgnl3D3u/mRPXzSzUcBMYJuqt2e4+8s55q9fWqVMkGKkBRrtwKnNzkg1M7sH+GJvD1QzOxc4l2IuzN0ys9uA89z9mV5+fyJwMbUXxzI6E+ioWr4DKGOhciK12/IlQIFGL8QA41JgfNF5STKzJ4Dr3f3qXn5/BjCd8pUPtxDKue7KhxHUl8WXAaULNIAzgG2rlu+knGWCFKCsfTQmAQ+a2dQtfdHMfgxcTskKkeho4LEYQPTIzE4H7qH8QQbUN6+sKSQXW7Y8sbyykFy0GDM7GVhECYOMaD/gKjN73MxG9/RFM7sVuIRylg/HE8qH7rbzRkINSLUN+Wap355NLK8uJBdSSmUNNCDUrMw3s3HdfSE28RzXvCz1y7bAnWa2Z3dfMLMpwLXNy5JIOjM7BJhTdD56aWdgSHcfmtlcQrBfZtsCC7YUMIm0srSmk05gPiEiHdqkfKwntJseBuyU+GwesE/yD2KBmNbEsxh4jOblvdp6Qh+HicDIqvfbgbnAAck/iG3HP0xZ1zOE39Ls/bAT5Q/eWlbc3+cAbVVvz3L3PxeUpbeY2RDCcZq0HFhIc4/FpJHA+4BKwD7P3U/q7stmdjih6Syp6PJhJ+Dj1DYzdBC2+4QC8iSSu7RAY11PJ3CezGwE8D1ClWLFGDObktKJ7xspqzjW3W/NLYO9ZGY7AjcSmoAqxpvZeHdfnPj6adQWOgDXEPp2bMwxm6niPlCgkZ8R1B+7C4DCAw3gBOqbGGYBn3f3UjSPxWadd7j7FVv46tcTy2uBqWXoDGxmuwI3AQdXvX2wmY1TB0oZiFKbTuJdV9O5+2vuPpUwaqNadeBROVGT7ZrnlSHIAHD3P7v7YdT3EUi7wzo2sXyfu08vIsiItjjqRBrSSbjoVXujiIykOCGxvNjdzyhLkAHg7jdsKciIzZTJvk7nlSHIAIijRiZRXz4cn/J1kZbXXR+Nbts9myTZm3z/xPJHEsurCLUAZfO9xPLY6oUY0O2X+M7lueZoy4qqGpcCxWaT5LHYq1EdJZQMMla4+6xCctKNeCNxY+LtDxeRFymvdXcetfv6hacctH7hKQetX3yOFZ2f/kprOimDxxLLO5nZ8Ko7q10Snz9RYA1ATx5NLCfzvQvw9qrlTqBfz94QadAuhGadag8VkZEMJJt/kuVJWTyYWN65kFxIqaxffI5tXvnEyW++/uJhm17+7R5vblj51nm55sZ3LRs0fLdFg0bsffOwQ+feVmA2+6SsgUZaVXIHXcMoOxKflXUoVbKKfKiZDakKioZSuw/WpfyNSDMMobaDaiflPa+2JFmu/bWQXGyZznWpsfb2iTM3Pn7lF1hL7WPaos2vvjCaFS9MY5sHpq2ZP+bXbTt/+GtDD5lzf9Mz2kdlDTS6Gw3Tl++3ik5q89/Kv0W2bHPRGeilduBHZraa8h6TbcAV7n5X0Rnpp6KbqKUk1t151O6bX33qZ5uWLhjLNtTfSlfrADbB5peXHLr51SWHrlsw7d+GTZz/3SZltV/KWoCIDEjuvtKsrql1RRF56YWDt/yVwt0V//WkbQufixTGzIZvXvXobzaveGE029C7o7WNEHCshc6n5l+3bsE0yhxsKNAQyZiZfZ3QYTltvqCh1N/J3hRrDtK+u9Tdz8g4iwOJJoCUlva7L3XevvnlPgQZ1WLtRufS+detX3zOoqHjr/QcstgwBRoi2Tua+hEcPemp5uBAwjwSeRtKzxW2IpKxdb8+6ejOJ+ce2q8go6INWAubnr9zHvD+zDKXoVYKNFoprz0ZQpjDQPK3qaB0/0TfAo2eJOeVycsK4HxgGMVtt944nb7PW1Lm3yNbsc0v33c1G2g8xN8GNq9aMnbdr086uoyjUcp68e6p42crSSvgkkFG9T5oozV/uwKnWslhzI3YPcN1dcvdVxKmJC81MzuYvgcaZe2j0Z/zJq05rlW1YlmXmfULTzlo4x/mjE4bXdJnsVbjzdeWTgVuy2CNmSproLFjYrmT2iFqyXbZMs7MCPXztqxOPO/jdcIQt0o82wFsTzmnga6WLCBHpn6reO9KLK9rUrrfAsZQX5CuIzx59Vxqz71ZwHOE2oRq7ZT/WGi25ORjr6d8J7mfy1o+JM+b5Hm1hvBbqqco2CHXHPVDfPBg8hkgaUN3k/sqy4C85Wx+ffmRmdRmVGwDb65ZfkDimVOlUNZAY1Ji+fnEBfqZxOf7mNlod1+Wc7766sjE8nPVC+6+zMxWUVsQTgKezDlfjXqa2qaBo0ifGK4wcb6Z5PCOPzYjbXfvcVuY2ZnUnnsXlGFStbKLjxbfO/H20pSvJvezmdmOJdzGRyWWn65eiCOUXiQErRWHA2WbD+XD1N9UPZXyvWS5/fF8stMa3nzjxXGZ1GZU2bz6hdEPX3rUjsMme7OaXHulu0eQFxYNxcLkzMTbCxPL/01tdNwOXJlnvvoqTm+fnNvktylfXZRYnhEnNitK2h1iUnJ/HG9myblninYFtfcKa4EHCsrLW8wsbS6ZdzY9I63pm9QGaCtID8ofoPaOuoNwPJRGPF+Sc5skzysIs81WOzfO9VQmlySWl3Rz05f8fXua2ZSc8rR1KmlvpNLMdWJmQ+LUzvdTX5n0g+qFWC2UnM76ODObGwOVwsTfcQxwd8rH309577rE8m7AgwVeuHuz729Kee9XZjY1zplRGDMbbWazqQ/ybnL3MgyF7O6cKw0z+7qZ3W5mhxc1wWIiP5V9mrww35xWRRz3c/IYPdHMZptZsumlqWL5MBX4VcrHaefV7MTySOC3ZjYx88z1kZmNNbO7qZ9bJnVemThzdXIiuevjTZlkoaS9kdKaToYBj5hZszv4jSS9LXWeu6fdtVwIfJba33AiMM3MllJcB8XufsfMOGtjDXdfaGb3UTvEcQywyMyeofkze24xUHD3P5vZhcCXq97eFpgPLI/NQUUYQug8mdbq+dXmZqX1xJq0/6QrSDsSWGVmr1LcDLNDCM0laWXVN3v4u68CpybeOxU4wcyep3zlw4VpTTvuvtjM7qC2GXZP4J6CyoeKIdQ26VQsp5tAI7oAuL5qeSfgYTP7krtflGH+Sm/Q0B3K+qC+zKWdvO2kH0BFWEJ9YQGEqZbN7ETCxa1amfJf8ZC7n9/D558CnPp2zkJrZ3ri7l8xs4OofwbEbpSv8920EvbfKZVYc/Eb6ofljqScnX2npQXuFbH/0zTqy4cOylc+3OfuX+nh86nAE9SXB2UsH47qaYJLd59tZidRX26U8bfkatB2u98LD0zLbIUbYPBO71q2/xeefimzdWakzNW4i4EDt3DQ3gycQrknJ7oLmNDTF+KdzARCYFU2PXUYngTc0ayM9EMncFo8TsokWWtUeKfs2ARxGeV9HHpFr/dp/M5plHsY5R3Ud36vEffNBEKwUVargMnu3puOqkdR/1uKqpkpzKDhuy6ijUz7VQx6+9/OL+NM5oOBtxWdiYQlwHnufkAc298jd78BGAfMo1wBxxPAWe4+uTdDjWLz0DhC1WKyHbOU3H2ju08hPLmyTIXgWuAWYH93T7Zxl0HhgUWaeC69l9AsWbYp4tcSzvE+7dP43f0Jx0PZyocz3H1Kby4MsUZuHPAl6kdvFGkVcA1gvZ3cLvah+QjhuS2VZtayXYdyN3T8lT54+zG/ZkMGK9sEdMDgUfvdkMHaMjcodp48hGIfujSEUAg81cuIOFXsjT2W+iaIZlpPmJ+ikd8xnPAo2eRQvmarPMX0x70JlmKnrr0J/TX6ejxdQG316SzgPsKjsftiBfBYT9XqRYqdZT9Gba3G/SXpqFojlg27U+z51EZ4lsiSRvdpCcqHIYRRXQOlfFgGPN6bG8LuxFFY44GXGtkmvUhnX0LzdLWfuPsn80qzN9YvPsc2PnpluElrpCPnWmjb46PzO4554IRsctY/sZPyPYm37xpURGZEkszsXmrbbSe38PTfIlIiZQ00ANbePnHmpqULvtDv+U7Whr4ZH/rm28cU/aCu7gKNMvfRkK1Lst9CkXfRIiJN0TFlwYy2PT46nw30rb/GJmAtDBox6rW2dx93RNFBRk8UaIiIiBSo45gHTmjbe+KlQOhE0FPAsSn+2wCDdxnzWPuYkw8s6/TwFQo0RERECtYxZcGM9n1OOmbwLmMee2s0SiXoqPw/dmce1DHqtba9J176oYvaP1j2IANK2vtdRERkaxOneL9t/cJTDtr8+vIj33zjxXFsWvMeAAYPXzVo2A5PDtpu93v3P9vnui8obVNJkgINERGREhl6yJz7CdNxVEaq0TUMuvApm/pMgYaIiEhJlfEBXH2lPhoiIiKSGwUaIiIikhsFGiIiIpIbBRoiIiKSGwUaIiIikhsFGiIiIpIbBRoiIiKSGwUaIiIikhsFGiIiIpIbBRoiIiKSGwUaUhYjE8tvKyQXIiKSKc11ImXxcGL5xUJyISIimVKNhpSCu58EvM/d94mvtxedJxERaZwCDSmNyiyFA2G2QhERCRRoiIiISG4UaIiIiEhuFGiIiIhIbgbUqBMz2xM4ErjD3Z8pOj+90Yp5FpGti5ntA0wCbnX3ZRmtcywwHRgNfNXdF2exXimfARVoAB8HrgL+ArTKRftAQp7foHXyLCJbl8nA5cCy+K8h8QbrYbquQXcBCjQGqIEWaLwWX1cXmou+qeT19UJzISLSvUrZujaj9f0z4frzaeC2jNYpJTXQAg0RESm/3eLrL9x9TaE5kdypM6i0HDM7xszuju3GItJ61sfX4YXmQppCgYa0og8QOqbtUnRGRESkZwo0yqOt6Ay0kCWJVxFpLasB3P3lojMi+avpo2FmU4ETgZ2BJ4Br3f2RrBIzsyHAmcAngCHAL4Ery9xGZ2a7AmcDhwCvAje7++wcknoupnUN8C7gKWBW1kO+zGw68CywErgYeAU4w91XZrDuEcBZhNE/G4Hvu/sNMc1X3P3mDNIYC3wuLn7bzO7Oan/EnvCfB/YnbJ+57v7DLNbdDPH8mgGsdveru/n8i8Bz7n5DRmlWzo8DCfv8p2lpN5jGeOBw4Krq49TMTga2zyq92BT3KWAe4Te9j3AONnzcxvVPB6YCjwD/nnW5F7fHCcAowoiOy8o4ZN7MxhGuAZjZ1YQOprdkea2RchkMYGbDzWwRMJ/wTIe9gFOBh+NB0bBYID1LGCL1IWAM8A3gj2Y2Oos0smZmhwAvEQrvvQjBxvVmdm8OyX0xpnVcTOtEYJGZnZtxOpcDPwd+RdgPE4DORldqZvsShud+jVBA7wfMMbO7CcN3z2s0jWgsMD7+/3hCYNMwM5sCPA2cTtj+hwM3mtmtWay/GeIcMUcAV8WLc9LphP2zdxbpmdkxdJ0fY4BxMe0XM+4/cyLwZWCPxPvfIRxbWRlP2D4OnAYcTHbb6lpCXscQbrb+aGaZ9U8wszuBOYTjdi/Cvn7azA7PKo0MvZ+wHSBsixnAAYXlRnI3OB7svyScZOcB27j7KMJd9X3Avhml9TNCT+NPu/vwmMYn4nu/yCiNzMTt8gtCtH2Au49y9yHA+cDBseDIQuUifyRwobsPittmL0LTwOXdXDT6a2l8PdvdhwPvdvfXevqDXvo5MJKwf7eLv+EAwp0uhBqaLNwEzIz/n0YI/hoSg+CfAysAi/t6UEznaDP7SqNpNNEn4+t1KZ9dAKx194Z/TwwkfgosB94ft9l2wLGEc/qeDC+klSHg6xLvvwisyigN6Bq6+TLwjnguXtToSuPxdTowL54XpwA3NrreqvVfQggwZlaVH+8lbJs7zWzHrNLKyA3ALfH/BxCuNdcXlx3J22C6IvdZ7n5F1Qyay9x9AnBno4nEWpEPEk6Et6qi41TgFwL7ZXwxzcIpQAdwbHXzhbvPJARgp5vZqAzTm1d9AYhVnofFxS9nmM5I4PVKc0MW1bexNmBPQqBUvX8XAxPj4jaNphPXuRH4Y1x8PIsmH8JFAOAwd/99VVrnE4K9L8dmh9KLbd7zSJxTcR+NBL6aUVKVmoQPuPtjVenfSggAdyOULa3o4oybNTbE17FmNtrdb3D38zM694YTagQeiscrAO7+JDAlLv5Lo+lkKZ7Dz8XF/4nXmtI2n0vj2glPfAO4LO0L7v7nDNL5UHw9zczOqHp/A+FiDuHOt0xPhts/vs5J3JltIBTYEJoIFjaYTqWfzJzkB+6+zMyeIQSCWRlOuBPM0qT4+oPkB+6+2Mw6gR0yTG9EfM1qnR+Ir3f3sK/3Bp7MKL28nU1obriOcIwCfDu+XtnoymPQNQlYnFY+uPvNZjY/5iHT/hpNsjzLlbn7yljuXQu8YGa3EB65ncXx9J74ama2ktqAvhLgHEFXLWBZbBdfRwBFBRlZPXxMuqSeO+3A2+P/89zolcJ6IaF6eruqz14idLz7bY7p90flYnZHfK0+gZ8ljAN/PoN0Kuvd1M3nb9AVjGWhjdBpL0uVYKmnYyiTGo2cVI7PnwBDqc3r/xL2zatNzlO/xQvb94FTY7X5ZkKN08xKjWWDKrU7K3r4Tie153kWNieWsz6Oc+Pus8zsd4Tah+OBKWb2Dxl0gHxbfH0UeIzabb6aUHOQRTk1EP1d7EDbErWVLWAj3XS1aCccnOOBg4BMeleneDa+fsfdG60BaJYVAO7+mZzTqUTz40mvHdmH8g/jrOSv7hiKzUvtwP81O1N9UNnXZ2zpiy1kBqFD9/fp6gf0tSxW7O5rzGw5YX/XiZ272wkjH7Kwvpv3R3bzfqNyufDEoGKqmV0FLCJ0zJ7Q4Gor84484u7TG1zX1uaDpNQkS/YGA5WhgVcn+xyY2cmxZ3mjKp0958YhkNVp/NjM3oxDC8tkNkAcNVHDzJ40s5VZ9hoH/iM5+iZ28mqn/NXPP4qvF6dskx/E1zLP5fJdADNLBknDzewVM3u6VfpoVMS+K7MInYyPJvTByrKK+gJgZDxGk+bG129llNaj8XVC5Y14nO1GGIZfamb2T2Z2a6Xsq+rz1XCgFGdSXQKcmRwhaGbTY9k6tdF0RBrR7u6PmNk0wtDWv5jZTEJ12xGEQqrhDl3u/pqZnUKIHv9iZlcQ2nJOIwyDvA34U6Pp0NXE0HAAELfLNYQT+GnCxWgIcC6hgLgwo4K7ktcOQvttZfsfQ2gHv8/dZ2WQTkUHGd8JuvvLZnYe4Q7tFTO7lBBYfI5QZQ/h2SxZ2Ta+Ds1iZe5+V2w3Pz6OprgeeAdhyHE7cFFGTQ7N9nngs4TfcGGWK3b32WY2GZgRh4HPA7YnDDceCZxf3bG2Qb8ijKC41sz2IJQdlWHNl2eUBnSVH1nPATWCEOw9GJ8bUbnwZxWIHQv8gfA4glmE4OuwmOYSsun7VmmiySrgrtzUar6trcBgCJ23CBe1hwhVrtcSgoxZwI+zSCg+IGga8EJM4yrg3cBZ7n5MRhft5YQTq6e2416LVZFnATsBlxCe+/EqMC2LIYLRCkKeJxM6bFW2/yTC9p/U/Z/2y2JCtW2m3P0KwkidNYQq+ssJndH2j2ku7f6v++w5wjbLbGiju08FvkRoqrqKMNJnKTA56wdQNVHlonBHHk9gdPdPEoZ7G2GbfY2u8yOzzoexbDiIrvLpKmBXwoPmbs8qHbrKj1cyXCfxRuE0YHfCuX0wcF5WD4OLnUor59npMY2jCeXH+2KtR6MqNSdZjPICeDyuLzlkOS/DmpSO1NtjUPKd2HlsGLAyryFHcVx5e0YnQFPEZo3OPArsRDojCB10/5rR8y2arlnbKg+xiWQXWjT/1WJT0PHAXnk/IbKJ58euhLvgP7VaLVPVsZVn2Zp7+d2KYreAvPvbSbrn6wINEWl98YKzgtD0NqHg7IjIVkyTqokMTLfF16we/S4i0i8KNEQGmDgi4w3C02Y1UZWIFOr/AcSw31jaY8ZYAAAAAElFTkSuQmCC';
+
 var LOGO_HTML = '<div class="logo-wrap">' +
-  '<img src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" ' +
+  '<img src="' + LOGO_SRC + '" ' +
   'class="logo-img" alt="body + soul" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline\'">' +
   '<span class="logo-txt">body + soul</span>' +
   '</div>';
@@ -1520,25 +1523,11 @@ function vSchnellmangelErgebnis() {
   var bedenkenBadge = m.bedenken ? '<span class="badge badge-crit" style="font-size:10px">&#9888; Bedenkenanzeige</span>' : '';
 
   var centerleiterMail = centerleiterEmailFor(insp.standort);
-  var subject, body;
-  if (m.bedenken) {
-    subject = 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum);
-    body = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
-      (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
-      (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
-      (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
-      '\n\nDie vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.\n\nBitte Erhalt bestätigen und Zeitplan zur Mängelbeseitigung mitteilen.\n\n' + insp.begeher;
-  } else {
-    subject = 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum);
-    body = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
-      (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
-      (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
-      (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
-      '\n\n' + insp.begeher;
-  }
-  var mailtoHref = 'mailto:' + centerleiterMail + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  var mt = schnellmangelMailText(insp, m, false);
+  var mailtoHref = 'mailto:' + centerleiterMail + '?subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body);
   var recipientHint = centerleiterMail
-    ? '<div style="font-size:11px;color:var(--text-light);margin-top:6px">Empfänger: ' + centerleiterMail + ' (Centerleiter ' + insp.standort + ')</div>'
+    ? '<div style="font-size:11px;color:var(--text-light);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">Empfänger: ' + centerleiterMail + ' (Centerleiter ' + insp.standort + ')' +
+      '<button class="btn-outline" data-action="copy-cl-mail" data-mail="' + escH(centerleiterMail) + '" style="width:auto;padding:4px 10px;font-size:11px">Adresse kopieren</button></div>'
     : '<div style="font-size:11px;color:var(--warn);margin-top:6px">Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte manuell eintragen.</div>';
 
   var fotosPreview = '';
@@ -1561,10 +1550,11 @@ function vSchnellmangelErgebnis() {
     (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
     fotosPreview + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-bottom:calc(20px + var(--safe-bottom))">' +
-    '<button class="btn-primary" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige exportieren (PDF)' : 'PDF exportieren') + '</button>' +
-    '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Per E-Mail versenden</button></a>' +
+    '<button class="btn-primary" data-action="teilen-schnellmangel" id="btn-teilen-sm">' + (m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)') + '</button>' +
     recipientHint +
-    '<div style="font-size:11px;color:var(--text-light)">PDF vorher exportieren, ein automatischer Anhang an die E-Mail ist technisch nicht möglich.</div>' +
+    '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen.</div>' +
+    '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>' +
+    '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Mail ohne Anhang</button></a>' +
     '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Fertig</button>' +
     '<button class="btn-danger" data-action="del-insp" data-id="' + insp.id + '" style="margin-top:14px">Meldung löschen</button>' +
@@ -4594,6 +4584,14 @@ document.addEventListener('click', function(e) {
   if (a.action === 'do-csv') { doCSV(); return; }
   if (a.action === 'edit-schnellmangel') { nav('defect'); return; }
   if (a.action === 'export-schnellmangel') { doExportSchnellmangel(); return; }
+  if (a.action === 'teilen-schnellmangel') { doTeilenSchnellmangel(); return; }
+  if (a.action === 'copy-cl-mail') {
+    var clm = a.mail || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(clm).then(function() { el.textContent = 'Kopiert'; }, function() { prompt('Adresse kopieren:', clm); });
+    } else { prompt('Adresse kopieren:', clm); }
+    return;
+  }
 
   if (a.action === 'go-unterschrift') { nav('unterschrift'); return; }
   if (a.action === 'cancel-unterschrift') { nav('summary'); return; }
@@ -5005,7 +5003,7 @@ function doExport() {
     bedenkenSection = '<hr class="page-break">' +
       '<div class="top"><div><h1 style="color:#C0392B">Sicherheitstechnische Bedenkenanzeige</h1>' +
       '<div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
-      '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul">' +
+      '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul">' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:9pt">' +
       '<tr><td style="width:130px;color:#717D7E;padding:3px 0">An:</td><td><strong>Geschäftsführung ' + S.firmierung + '</strong></td></tr>' +
@@ -5079,7 +5077,7 @@ function doExport() {
     '<div class="top">' +
     '<div><h1>Begehungsprotokoll Brandschutz</h1>' +
     '<div class="company">' + S.firmierung + ' &middot; Brandschutzbeauftragter</div></div>' +
-    '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul">' +
+    '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul">' +
     '</div>' +
     '<div class="meta">' +
     '<div class="meta-box"><div class="meta-lbl">Standort</div><div class="meta-val">' + insp.standort + '</div></div>' +
@@ -5098,13 +5096,168 @@ function doExport() {
 }
 
 /* ── SCHNELLMELDUNG: PDF-EXPORT ── */
-function doExportSchnellmangel() {
+function aktuellerSchnellmangel() {
   var insp = S.currentInspection;
+  if (!insp) return null;
   var maengel = insp.maengel || [];
-  var m = null;
-  for (var i = 0; i < maengel.length; i++) { if (maengel[i].id === S.currentDefectId) { m = maengel[i]; break; } }
-  if (!m) m = maengel[0];
-  if (!m) return;
+  for (var i = 0; i < maengel.length; i++) { if (maengel[i].id === S.currentDefectId) return maengel[i]; }
+  return maengel[0] || null;
+}
+
+// Betreff und Text der Mail; mitAnhang = PDF hängt schon an (Teilen-Menü)
+function schnellmangelMailText(insp, m, mitAnhang) {
+  var dringCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
+  var kern = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
+    (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
+    (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
+    (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '');
+  if (m.bedenken) {
+    return {
+      subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum),
+      body: kern + '\n\n' + (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
+        '\n\nBitte Erhalt bestätigen und Zeitplan zur Mängelbeseitigung mitteilen.\n\n' + insp.begeher
+    };
+  }
+  return {
+    subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum),
+    body: kern + (mitAnhang ? '\n\nDie Meldung ist als PDF angehängt.' : '') + '\n\n' + insp.begeher
+  };
+}
+
+function doExportSchnellmangel() {
+  var d = schnellmangelDokument();
+  if (!d) return;
+  var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
+    '<title>' + d.titel + '</title>' +
+    '<style>@page{margin:18mm 18mm 14mm;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + d.css + '</style></head><body>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    '<table class="pdf-page-table"><tfoot><tr><td><div class="pdf-footer">' + d.fusszeile + '</div></td></tr></tfoot><tbody><tr><td>' +
+    d.body +
+    '</td></tr></tbody></table>' +
+    '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+  else { alert('Pop-ups für diese Seite erlauben, um das Dokument zu exportieren.'); }
+}
+
+/* ── SCHNELLMELDUNG: PDF ALS DATEI + TEILEN-MENÜ ── */
+// Bibliotheken nur bei Bedarf laden (brauchen einmal Internet)
+var pdfLibsPromise = null;
+function ladePdfLibs() {
+  if (window.jspdf && window.html2canvas) return Promise.resolve();
+  if (pdfLibsPromise) return pdfLibsPromise;
+  function lade(src) {
+    return new Promise(function(ok, fehler) {
+      var s = document.createElement('script');
+      s.src = src; s.onload = ok; s.onerror = function() { fehler(new Error('Laden fehlgeschlagen: ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  pdfLibsPromise = Promise.all([
+    lade('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+    lade('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js')
+  ]).catch(function(e) { pdfLibsPromise = null; throw e; });
+  return pdfLibsPromise;
+}
+
+// Rendert das Dokument in einem unsichtbaren iframe (eigene Styles, App-Design bleibt unberührt) und baut daraus ein A4-PDF
+function erzeugeSchnellmangelPdf(d) {
+  return ladePdfLibs().then(function() {
+    var breitePx = 658; // 174 mm Inhaltsbreite bei 96 dpi
+    var fr = document.createElement('iframe');
+    fr.setAttribute('aria-hidden', 'true');
+    fr.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + breitePx + 'px;height:1200px;border:0';
+    document.body.appendChild(fr);
+    var doc = fr.contentDocument;
+    doc.open();
+    doc.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><style>' + d.css +
+      'html,body{background:#fff;width:' + breitePx + 'px;}</style></head><body>' + d.body + '</body></html>');
+    doc.close();
+    var bilder = Array.prototype.slice.call(doc.images);
+    return Promise.all(bilder.map(function(img) {
+      return img.complete ? null : new Promise(function(ok) { img.onload = img.onerror = ok; });
+    })).then(function() {
+      var hoehe = Math.ceil(doc.body.scrollHeight);
+      return window.html2canvas(doc.body, { scale: 2, backgroundColor: '#ffffff', width: breitePx, height: hoehe, windowWidth: breitePx, windowHeight: hoehe, logging: false });
+    }).then(function(canvas) {
+      document.body.removeChild(fr);
+      var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      var rand = 18, inhaltB = 174, inhaltH = 297 - 18 - 20; // unten Platz für Fußzeile
+      var pxProMm = canvas.width / inhaltB;
+      var seitePx = Math.floor(inhaltH * pxProMm);
+      var seiten = Math.max(1, Math.ceil(canvas.height / seitePx));
+      for (var s = 0; s < seiten; s++) {
+        var h = Math.min(seitePx, canvas.height - s * seitePx);
+        var teil = document.createElement('canvas');
+        teil.width = canvas.width; teil.height = h;
+        teil.getContext('2d').drawImage(canvas, 0, s * seitePx, canvas.width, h, 0, 0, canvas.width, h);
+        if (s > 0) pdf.addPage();
+        pdf.addImage(teil.toDataURL('image/jpeg', 0.9), 'JPEG', rand, rand, inhaltB, h / pxProMm);
+        pdf.setDrawColor(213, 219, 219); pdf.setLineWidth(0.2);
+        pdf.line(rand, 297 - 14, 210 - rand, 297 - 14);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(113, 125, 126);
+        pdf.text(d.fusszeileText + (seiten > 1 ? '  ·  Seite ' + (s + 1) + ' von ' + seiten : ''), 105, 297 - 10, { align: 'center' });
+      }
+      return pdf.output('blob');
+    }, function(e) { if (fr.parentNode) document.body.removeChild(fr); throw e; });
+  });
+}
+
+var smPdfVorrat = null; // fertiges PDF, falls das Teilen-Menü einen zweiten Tipp braucht
+function doTeilenSchnellmangel() {
+  var d = schnellmangelDokument();
+  if (!d) return;
+  var mt = schnellmangelMailText(d.insp, d.m, true);
+  var schluessel = d.m.id + '|' + JSON.stringify([d.m.beschreibung, d.m.dringlichkeit, d.m.frist, d.m.zustaendig, d.m.bedenken, (d.m.fotos || []).length, d.insp.standort, d.insp.datum]);
+  var btn = document.getElementById('btn-teilen-sm');
+  var btnText = d.m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)';
+
+  function teilen(file) {
+    var daten = { files: [file], title: mt.subject, text: mt.body };
+    return navigator.share(daten).then(function() { smPdfVorrat = null; }).catch(function(e) {
+      if (e && e.name === 'AbortError') return; // abgebrochen
+      if (e && e.name === 'NotAllowedError') {
+        // Erstellen hat zu lange gedauert, iOS will einen neuen Tipp
+        smPdfVorrat = { schluessel: schluessel, file: file };
+        if (btn) { btn.disabled = false; btn.textContent = 'PDF ist fertig: jetzt teilen'; }
+        return;
+      }
+      alert('Teilen nicht möglich: ' + (e && e.message ? e.message : e));
+    });
+  }
+
+  if (smPdfVorrat && smPdfVorrat.schluessel === schluessel) {
+    if (btn) btn.textContent = btnText;
+    teilen(smPdfVorrat.file);
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'PDF wird erstellt …'; }
+  erzeugeSchnellmangelPdf(d).then(function(blob) {
+    var file = new File([blob], d.dateiname, { type: 'application/pdf' });
+    if (btn) { btn.disabled = false; btn.textContent = btnText; }
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) return teilen(file);
+    // Kein Teilen-Menü (z. B. Desktop-Browser): PDF herunterladen und Mail ohne Anhang öffnen
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = d.dateiname; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+    var an = centerleiterEmailFor(d.insp.standort);
+    setTimeout(function() {
+      window.location.href = 'mailto:' + an + '?subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body.replace(/ist als PDF angehängt\./, 'liegt als PDF bei (bitte die eben gespeicherte Datei ' + d.dateiname + ' anhängen).'));
+    }, 600);
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = btnText; }
+    alert('PDF konnte nicht erstellt werden' + (navigator.onLine === false ? ' (keine Internetverbindung, wird beim ersten Mal gebraucht)' : '') + '. Bitte „Drucken / als PDF sichern“ nutzen.\n\n' + (e && e.message ? e.message : e));
+  });
+}
+
+function schnellmangelDokument() {
+  var insp = S.currentInspection;
+  var m = aktuellerSchnellmangel();
+  if (!m) return null;
 
   var dCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
   var dc = m.dringlichkeit === 'gering' ? 'dg' : m.dringlichkeit === 'mittel' ? 'dm' : 'dc';
@@ -5155,7 +5308,7 @@ function doExportSchnellmangel() {
     }
     body = '<div class="top"><div><h1 style="color:#C0392B">Sicherheitstechnische Bedenkenanzeige</h1>' +
       '<div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
-      '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul">' +
+      '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul">' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:9pt">' +
       '<tr><td style="width:130px;color:#717D7E;padding:3px 0">An:</td><td><strong>Geschäftsführung ' + S.firmierung + '</strong></td></tr>' +
@@ -5180,7 +5333,7 @@ function doExportSchnellmangel() {
       '</div>';
   } else {
     body = '<div class="top"><div><h1>Mangel-Meldung</h1><div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
-      '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul"></div>' +
+      '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul"></div>' +
       '<div class="meta">' +
       '<div class="meta-box"><div class="meta-lbl">Standort</div><div class="meta-val">' + insp.standort + '</div></div>' +
       '<div class="meta-box"><div class="meta-lbl">Datum</div><div class="meta-val">' + fmtDate(insp.datum) + '</div></div>' +
@@ -5193,19 +5346,14 @@ function doExportSchnellmangel() {
       fotosEx + '</div></div>';
   }
 
-  var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
-    '<title>' + (m.bedenken ? 'Bedenkenanzeige ' : 'Mangel-Meldung ') + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
-    '<style>@page{margin:18mm 18mm 14mm;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + css + '</style></head><body>' +
-    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
-    '<table class="pdf-page-table"><tfoot><tr><td><div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. Hübner</div></td></tr></tfoot><tbody><tr><td>' +
-    body +
-    '</td></tr></tbody></table>' +
-    '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
-    '</body></html>';
-
-  var w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); }
-  else { alert('Pop-ups für diese Seite erlauben, um das Dokument zu exportieren.'); }
+  var art = m.bedenken ? 'Bedenkenanzeige' : 'Mangel-Meldung';
+  return {
+    insp: insp, m: m, css: css, body: body,
+    titel: art + ' ' + insp.standort + ' ' + fmtDate(insp.datum),
+    dateiname: (art + '_' + insp.standort + '_' + insp.datum).replace(/[^A-Za-z0-9ÄÖÜäöüß_.-]+/g, '-') + '.pdf',
+    fusszeile: S.firmierung + ' &middot; Brandschutzbeauftragter T. Hübner',
+    fusszeileText: S.firmierung + ' · Brandschutzbeauftragter T. Hübner'
+  };
 }
 
 /* ── UNTERWEISUNGSNACHWEIS PDF ── */
@@ -5254,7 +5402,7 @@ function doExportUW() {
     '<div class="top">' +
     '<div><h1>Unterweisungsnachweis Brandschutz</h1>' +
     '<div class="company">' + S.firmierung + ' &middot; Brandschutzbeauftragter &middot; Grundlage: DGUV V2</div></div>' +
-    '<img class="logo-pdf" src="https://www.bodyandsoul.de/typo3conf/ext/bsoul_corporate_site_distribution/Resources/Public/img/logo.png" alt="body + soul">' +
+    '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul">' +
     '</div>' +
     '<div class="meta">' +
     '<div class="meta-box"><div class="meta-lbl">Standort</div><div class="meta-val">' + uw.standort + '</div></div>' +
