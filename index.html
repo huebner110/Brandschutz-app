@@ -1525,10 +1525,11 @@ function vSchnellmangelErgebnis() {
   var centerleiterMail = centerleiterEmailFor(insp.standort);
   var mt = schnellmangelMailText(insp, m, false);
   var mailtoHref = 'mailto:' + centerleiterMail + '?subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body);
+  var betreffKnopf = '<button class="btn-outline" data-action="copy-cl-mail" data-mail="' + escH(mt.subject) + '" style="width:auto;padding:4px 10px;font-size:11px">Betreff kopieren</button>';
   var recipientHint = centerleiterMail
     ? '<div style="font-size:11px;color:var(--text-light);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">Empfänger: ' + centerleiterMail + ' (Centerleiter ' + insp.standort + ')' +
-      '<button class="btn-outline" data-action="copy-cl-mail" data-mail="' + escH(centerleiterMail) + '" style="width:auto;padding:4px 10px;font-size:11px">Adresse kopieren</button></div>'
-    : '<div style="font-size:11px;color:var(--warn);margin-top:6px">Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte manuell eintragen.</div>';
+      '<button class="btn-outline" data-action="copy-cl-mail" data-mail="' + escH(centerleiterMail) + '" style="width:auto;padding:4px 10px;font-size:11px">Adresse kopieren</button>' + betreffKnopf + '</div>'
+    : '<div style="font-size:11px;color:var(--warn);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte manuell eintragen.' + betreffKnopf + '</div>';
 
   var fotosPreview = '';
   if (m.fotos && m.fotos.length) {
@@ -1552,7 +1553,7 @@ function vSchnellmangelErgebnis() {
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-bottom:calc(20px + var(--safe-bottom))">' +
     '<button class="btn-primary" data-action="teilen-schnellmangel" id="btn-teilen-sm">' + (m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)') + '</button>' +
     recipientHint +
-    '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen.</div>' +
+    '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen. Der Betreff liegt dann in der Zwischenablage: in der Mail auf „Betreff“ tippen und „Einsetzen“ wählen.</div>' +
     '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>' +
     '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Mail ohne Anhang</button></a>' +
     '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
@@ -4588,8 +4589,8 @@ document.addEventListener('click', function(e) {
   if (a.action === 'copy-cl-mail') {
     var clm = a.mail || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(clm).then(function() { el.textContent = 'Kopiert'; }, function() { prompt('Adresse kopieren:', clm); });
-    } else { prompt('Adresse kopieren:', clm); }
+      navigator.clipboard.writeText(clm).then(function() { el.textContent = 'Kopiert'; }, function() { prompt(el.textContent + ':', clm); });
+    } else { prompt(el.textContent + ':', clm); }
     return;
   }
 
@@ -5213,6 +5214,8 @@ function doTeilenSchnellmangel() {
   var schluessel = d.m.id + '|' + JSON.stringify([d.m.beschreibung, d.m.dringlichkeit, d.m.frist, d.m.zustaendig, d.m.bedenken, (d.m.fotos || []).length, d.insp.standort, d.insp.datum]);
   var btn = document.getElementById('btn-teilen-sm');
   var btnText = d.m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)';
+  // iOS-Mail übernimmt den Betreff aus dem Teilen-Menü nicht, darum liegt er zum Einsetzen bereit
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mt.subject).catch(function(){});
 
   function teilen(file) {
     var daten = { files: [file], title: mt.subject, text: mt.body };
