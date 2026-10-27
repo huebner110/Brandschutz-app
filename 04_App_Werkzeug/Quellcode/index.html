@@ -380,6 +380,7 @@ var S = {
   firmierung: 'Body and Soul Fitness GmbH',
   adminPin: '',
   gfName: '',
+  grussName: '',
   gfEmail: '',
   gfCc: '',
   lastStandort: 'Sendling',
@@ -571,6 +572,7 @@ function save() {
     localStorage.setItem('bs2_firmierung', S.firmierung);
     localStorage.setItem('bs2_pin', S.adminPin);
     localStorage.setItem('bs2_gf_name', S.gfName);
+    localStorage.setItem('bs2_gruss_name', S.grussName);
     localStorage.setItem('bs2_gf_email', S.gfEmail);
     localStorage.setItem('bs2_gf_cc', S.gfCc);
     localStorage.setItem('bs2_intervalle', JSON.stringify(S.intervalle));
@@ -610,6 +612,7 @@ function load() {
     S.firmierung = localStorage.getItem('bs2_firmierung') || 'Body and Soul Fitness GmbH';
     S.adminPin = localStorage.getItem('bs2_pin') || '';
     S.gfName = localStorage.getItem('bs2_gf_name') || '';
+    S.grussName = localStorage.getItem('bs2_gruss_name') || '';
     S.gfEmail = localStorage.getItem('bs2_gf_email') || '';
     S.gfCc = localStorage.getItem('bs2_gf_cc') || '';
     var iv = localStorage.getItem('bs2_intervalle');
@@ -739,6 +742,14 @@ function lastInspForStandort(standort) {
   return S.inspections.filter(function(i) {
     return i.standort === standort && !i.schnellmeldung && inspFertig(i);
   }).sort(nachDatumAbsteigend)[0] || null;
+}
+
+function centerleiterKontaktFor(standort) {
+  for (var i = 0; i < S.kontakte.length; i++) {
+    var k = S.kontakte[i];
+    if (k.standort === standort && /^centerleit/i.test((k.rolle || '').trim()) && k.email) return k;
+  }
+  return null;
 }
 
 function centerleiterEmailFor(standort) {
@@ -1823,6 +1834,8 @@ function vSettings() {
     '<input type="text" class="form-input" id="s-firmierung" value="' + S.firmierung + '" placeholder="Firmenname"></div>' +
     '<div class="form-group"><label class="form-label">E-Mail-Empfänger (optional)</label>' +
     '<input type="email" class="form-input" id="s-email" value="' + S.defaultEmail + '" placeholder="name@example.de"></div>' +
+    '<div class="form-group"><label class="form-label">Name unter dem Gruß (Mails an Kollegen)</label>' +
+    '<input type="text" class="form-input" id="s-gruss-name" value="' + escH(S.grussName) + '" placeholder="z. B. Spitzname"></div>' +
     '<div class="form-group"><label class="form-label">Geschäftsleitung: Name (für die Anrede)</label>' +
     '<input type="text" class="form-input" id="s-gf-name" value="' + S.gfName + '" placeholder="Vorname Nachname"></div>' +
     '<div class="form-group"><label class="form-label">Geschäftsleitung: E-Mail</label>' +
@@ -2930,6 +2943,7 @@ function buildBackupData() {
     defaultEmail: S.defaultEmail,
     firmierung: S.firmierung,
     gfName: S.gfName,
+    grussName: S.grussName,
     gfEmail: S.gfEmail,
     gfCc: S.gfCc
   };
@@ -2991,6 +3005,7 @@ function importBackup(text) {
     if (data.defaultEmail)  S.defaultEmail  = data.defaultEmail;
     if (data.firmierung)    S.firmierung    = data.firmierung;
     if (data.gfName)        S.gfName        = data.gfName;
+    if (data.grussName)     S.grussName     = data.grussName;
     if (data.gfEmail)       S.gfEmail       = data.gfEmail;
     if (data.gfCc)          S.gfCc          = data.gfCc;
     save();
@@ -3117,7 +3132,7 @@ function srvStatusHtml() {
    Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
    haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
 var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege'];
-var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc'];
+var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc', 'grussName'];
 var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
 
 function syncEintraege() {
@@ -4612,6 +4627,7 @@ document.addEventListener('click', function(e) {
     var pv = (document.getElementById('s-pin') || {}).value;
     S.adminPin = pv !== undefined ? pv : S.adminPin;
     S.gfName = ((document.getElementById('s-gf-name') || {}).value || '').trim();
+    S.grussName = ((document.getElementById('s-gruss-name') || {}).value || '').trim();
     S.gfEmail = ((document.getElementById('s-gf-email') || {}).value || '').trim();
     S.gfCc = ((document.getElementById('s-gf-cc') || {}).value || '').trim();
     save(); nav('home'); return;
@@ -5108,20 +5124,34 @@ function aktuellerSchnellmangel() {
 // Betreff und Text der Mail; mitAnhang = PDF hängt schon an (Teilen-Menü)
 function schnellmangelMailText(insp, m, mitAnhang) {
   var dringCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
-  var kern = 'Bei einer Kontrolle am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' wurde folgender Mangel festgestellt:\n\n' +
-    (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
-    (m.zustaendig ? '\nZuständig: ' + m.zustaendig : '') +
-    (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '');
+  var kontakt = centerleiterKontaktFor(insp.standort);
+  var vorname = kontakt ? (kontakt.name || '').trim().split(' ')[0] : '';
+  var zustaendig = (m.zustaendig || '').trim();
+  // "Zuständig" weglassen, wenn es ohnehin der Empfänger ist
+  var zustEmpfaenger = zustaendig && vorname && zustaendig.split(' ')[0].toLowerCase() === vorname.toLowerCase();
+  var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '');
   if (m.bedenken) {
     return {
       subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum),
-      body: kern + '\n\n' + (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
-        '\n\nBitte Erhalt bestätigen und Zeitplan zur Mängelbeseitigung mitteilen.\n\n' + insp.begeher
+      body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
+        'bei der Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' habe ich einen Mangel festgestellt, gegen den ich sicherheitstechnische Bedenken habe:\n\n' +
+        (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
+        (zustaendig ? '\nZuständig: ' + zustaendig : '') +
+        (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
+        (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
+        (vorname ? ' Bitte bestätige mir kurz den Erhalt und teile mir mit, bis wann der Mangel beseitigt wird.' : ' Bitte bestätigt mir kurz den Erhalt und teilt mir mit, bis wann der Mangel beseitigt wird.') + gruss
     };
   }
   return {
     subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum),
-    body: kern + (mitAnhang ? '\n\nDie Meldung ist als PDF angehängt.' : '') + '\n\n' + insp.begeher
+    body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
+      'bei meiner Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' ist mir folgender Mangel aufgefallen:\n\n' +
+      (m.beschreibung || '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
+      (zustaendig && !zustEmpfaenger ? '\nZuständig: ' + zustaendig : '') +
+      (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
+      (vorname ? 'Kümmerst du dich bitte' : 'Kümmert ihr euch bitte') + (m.frist ? ' bis zum ' + fmtDate(m.frist) : '') + ' darum und ' +
+      (vorname ? 'gibst' : 'gebt') + ' mir kurz Bescheid, wenn es erledigt ist?' +
+      (mitAnhang ? ' Die Meldung' + ((m.fotos || []).length ? ' mit Foto' : '') + ' hängt als PDF an.' : '') + gruss
   };
 }
 
@@ -5249,7 +5279,7 @@ function doTeilenSchnellmangel() {
     setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
     var an = centerleiterEmailFor(d.insp.standort);
     setTimeout(function() {
-      window.location.href = 'mailto:' + an + '?subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body.replace(/ist als PDF angehängt\./, 'liegt als PDF bei (bitte die eben gespeicherte Datei ' + d.dateiname + ' anhängen).'));
+      window.location.href = 'mailto:' + an + '?subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body.replace(/(ist als PDF angehängt|hängt als PDF an)\./, 'liegt als PDF bei (bitte die eben gespeicherte Datei ' + d.dateiname + ' anhängen).'));
     }, 600);
   }).catch(function(e) {
     if (btn) { btn.disabled = false; btn.textContent = btnText; }
