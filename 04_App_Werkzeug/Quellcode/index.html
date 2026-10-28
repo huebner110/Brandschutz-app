@@ -890,7 +890,7 @@ function vMehr() {
     { action: 'go-unterweisungen', icon: 'unterweisung', titel: 'Unterweisungen', sub: 'Mitarbeiter und Nachweise je Standort' },
     { action: 'go-vorschlaege', icon: 'mail', titel: 'Vorschläge aus Mails', sub: nv ? nv + ' neu' : 'keine neuen', ton: nv ? 'warn' : '' },
     { action: 'go-vorgaenge', icon: 'mail', titel: 'Mail-Vorgänge', sub: offeneVorgaenge().length + ' warten auf Antwort' + (nu ? ', ' + nu + ' überfällig' : ''), ton: nu ? 'crit' : '' },
-    { action: 'go-belege', icon: 'aufgabe', titel: 'Belege', sub: 'fotografieren für die Techniker-Abrechnung' },
+    { action: 'go-belege', icon: 'aufgabe', titel: 'Belege', sub: belegeZuPruefen().length ? belegeZuPruefen().length + ' zu prüfen' : 'fotografieren für die Techniker-Abrechnung', ton: belegeZuPruefen().length ? 'warn' : '' },
     { action: 'go-matrix', icon: 'begehung', titel: 'Compliance-Matrix', sub: 'alle Standorte als Tabelle' },
     { action: 'go-qr', icon: 'begehung', titel: 'QR-Codes', sub: 'zum Aushang je Standort' },
     { action: 'go-settings', icon: 'technik', titel: 'Einstellungen', sub: 'Allgemein, Server, Daten' },
@@ -1178,6 +1178,9 @@ function heuteZuTunListe() {
   var na = (S.vorgaenge || []).filter(function(v) { return v && v.art === 'antwort' && !v.aktion; }).length;
   if (na) items.push({ prio: 2, tage: 0, icon: 'mail', ton: 'ok', titel: na + (na === 1 ? ' Antwort' : ' Antworten') + ' eingegangen',
     sub: 'Mail-Vorgang lesen und als erledigt markieren', rechts: 'neu', action: 'go-vorgaenge' });
+  var nb = belegeZuPruefen().length;
+  if (nb) items.push({ prio: 2, tage: 0, icon: 'aufgabe', ton: 'warn', titel: nb + (nb === 1 ? ' Beleg' : ' Belege') + ' ausgelesen',
+    sub: 'Angaben prüfen und speichern', rechts: 'prüfen', action: 'go-belege' });
   var alle = offeneMaengelAlle();
   LOCATIONS.forEach(function(loc) {
     var ue = alle.filter(function(it) { return it.insp.standort === loc && tageUeberfaellig(it.mangel) > 0; });
@@ -2032,7 +2035,7 @@ function vHilfe() {
     hSection('✉️', 'Mail-Vorgänge',
       'Anfragen, auf die du eine Antwort erwartest (Nachfass-Liste). Der Server prüft werktags um 8:30, ob eine Antwort da ist, und entwirft nach der Frist eine Erinnerung im Brandschutz-Gmail (gesendet wird nichts). Erledigt, Jetzt nachfassen und Frist ändern gehen an den Server und sind nach ein paar Minuten übernommen. Neue Anfrage: Betreff genau wie in der Mail eintragen.') +
     hSection('🧾', 'Belege',
-      'Bon, Rechnung oder Tankbeleg fotografieren und Art, Center, Grund und Betrag eintragen (bei Tankbelegen Liter, Km-Stand und Lieferschein-Nr., Betrag kommt über DKV). Die App warnt bei zu allgemeinem Grund und bei Hagebau ohne Ninox-Eintrag. Der Server legt die Fotos innerhalb von 10 Minuten in die iCloud unter 01_Zentral/Rechnungen/<Monat> und entfernt sie danach aus der App. Am Monatsende baut Claude daraus die Abrechnung.') +
+      'Bon, Rechnung oder Tankbeleg fotografieren und speichern. Claude liest auf dem Server innerhalb von 10 Minuten Geschäft, Datum, Betrag, Beleg-Nr. und Grund aus (bei Tankbelegen Liter, Km-Stand und Lieferschein-Nr., Betrag kommt über DKV) und schickt eine Push. Danach steht der Beleg auf „bitte prüfen“: antippen, prüfen, speichern. Selbst Eingetragenes bleibt. Die App warnt bei zu allgemeinem Grund und bei Hagebau ohne Ninox-Eintrag. Der Server legt die Fotos innerhalb von 10 Minuten in die iCloud unter 01_Zentral/Rechnungen/<Monat> und entfernt sie danach aus der App. Am Monatsende baut Claude daraus die Abrechnung.') +
     hSection('?', 'Hilfe',
       'Diese Seite.') +
     hSection('🔧', 'Technik',
@@ -2737,7 +2740,7 @@ function belegEntwurfMerken() {
   // Vor dem Öffnen der Kamera sichern: iOS lädt die Seite dabei manchmal neu
   var b = S.belegEntwurf;
   if (!b) return;
-  ['art', 'haendler', 'center', 'datum', 'grund', 'betrag', 'liter', 'km', 'lieferschein', 'notiz'].forEach(function(k) {
+  ['art', 'haendler', 'center', 'datum', 'grund', 'betrag', 'belegnr', 'liter', 'km', 'lieferschein', 'notiz'].forEach(function(k) {
     var el = document.getElementById('bl-' + k);
     if (el) b[k] = el.value.replace(/[<>]/g, '').trim();
   });
@@ -2748,7 +2751,8 @@ function belegEntwurfMerken() {
 
 function belegNeu() {
   var letzter = (S.belege || []).slice(-1)[0] || {};
-  S.belegEntwurf = { id: 'b-' + uid(), art: 'Kassenbon', haendler: '', center: letzter.center || 'HG', datum: today(), grund: '', betrag: '',
+  // Art und Datum leer: der Server liest sie vom Foto (Claude), Selbsteingetragenes bleibt
+  S.belegEntwurf = { id: 'b-' + uid(), art: '', haendler: '', center: letzter.center || 'HG', datum: '', grund: '', betrag: '', belegnr: '',
     ninox: false, liter: '', km: '', lieferschein: '', notiz: '', fotos: [] };
   try { localStorage.setItem('bs2_beleg_entwurf', JSON.stringify(S.belegEntwurf)); } catch(e) {}
   nav('beleg-form');
@@ -2774,7 +2778,7 @@ function vBelegForm() {
   var tank = b.art === 'Tankbeleg';
   var opt = function(liste, wert) {
     return liste.map(function(x) {
-      var v = Array.isArray(x) ? x[0] : x, l = Array.isArray(x) ? x[0] + ' – ' + x[1] : x;
+      var v = Array.isArray(x) ? x[0] : x, l = Array.isArray(x) ? (x[0] ? x[0] + ' – ' + x[1] : x[1]) : x;
       return '<option value="' + v + '"' + (v === wert ? ' selected' : '') + '>' + l + '</option>';
     }).join('');
   };
@@ -2789,10 +2793,13 @@ function vBelegForm() {
     '<div class="header-center"><div class="header-title-sm">' + (b.bearbeiten ? 'Beleg ändern' : 'Neuer Beleg') + '</div><div class="header-sub">für die Techniker-Abrechnung</div></div>' +
     '<button class="text-btn" data-action="beleg-speichern">Speichern</button></div>' +
     '<div class="content"><div class="card">' +
+    (b.bearbeiten ? (b.pruefen ? '<div style="font-size:12.5px;background:var(--warn-bg);color:var(--text);border-radius:8px;padding:8px 10px;margin-bottom:12px">' +
+      (b.lesbar === false ? 'Claude konnte den Beleg nicht lesen. Bitte die Angaben eintragen und speichern.' : 'Von Claude vom Foto ausgelesen. Bitte prüfen und speichern, dann ist der Beleg fertig.') + '</div>' : '')
+      : '<div style="font-size:12.5px;color:var(--text-light);margin-bottom:12px">Fotografieren und speichern reicht: Claude liest Geschäft, Datum, Betrag, Beleg-Nr. und Grund vom Foto aus (bei Tankbelegen Liter und Km). Was du selbst einträgst, bleibt so.</div>') +
     '<div class="form-group"><label class="form-label">Foto' + (tank ? '' : ' (Hagebau: Rechnung und Bon)') + '</label><div class="photo-grid">' + fotosHtml + '</div>' + abgelegt + '</div>' +
     '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Art</label>' +
-    '<select class="form-select" id="bl-art" onchange="belegArtWechsel(this.value)">' + opt(BELEG_ARTEN, b.art) + '</select></div>' +
-    '<div class="form-group" style="flex:1"><label class="form-label">Datum</label><input type="date" class="form-input" id="bl-datum" value="' + escH(b.datum) + '"></div></div>' +
+    '<select class="form-select" id="bl-art" onchange="belegArtWechsel(this.value)">' + opt([['', 'Automatisch']].concat(BELEG_ARTEN), b.art) + '</select></div>' +
+    '<div class="form-group" style="flex:1"><label class="form-label">Datum (leer = vom Beleg)</label><input type="date" class="form-input" id="bl-datum" value="' + escH(b.datum) + '"></div></div>' +
     '<div class="form-group"><label class="form-label">' + (tank ? 'Tankstelle' : 'Geschäft') + '</label><input type="text" class="form-input" id="bl-haendler" value="' + escH(b.haendler) + '" placeholder="' + (tank ? 'z. B. Shell' : 'z. B. Hagebau') + '"></div>' +
     (tank
       ? '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Liter</label><input type="text" inputmode="decimal" class="form-input" id="bl-liter" value="' + escH(b.liter) + '"></div>' +
@@ -2801,6 +2808,7 @@ function vBelegForm() {
         '<div style="font-size:12.5px;color:var(--text-light)">Betrag kommt über die DKV-Abrechnung. Tankbelege als Kopie zur Abrechnung, nicht in Ninox.</div>'
       : '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Center</label><select class="form-select" id="bl-center">' + opt(BELEG_CENTER, b.center) + '</select></div>' +
         '<div class="form-group" style="flex:1"><label class="form-label">Betrag (€)</label><input type="text" inputmode="decimal" class="form-input" id="bl-betrag" value="' + escH(b.betrag) + '"></div></div>' +
+        '<div class="form-group"><label class="form-label">Beleg-Nr.</label><input type="text" class="form-input" id="bl-belegnr" value="' + escH(b.belegnr) + '"></div>' +
         '<div class="form-group"><label class="form-label">Grund (konkret nach dem Bon)</label><input type="text" class="form-input" id="bl-grund" value="' + escH(b.grund) + '" placeholder="z. B. Sanitärbedarf, Werkzeug + Malerbedarf"></div>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:4px 0 8px"><input type="checkbox" id="bl-ninox"' + (b.ninox ? ' checked' : '') + '> In Ninox eingetragen</label>') +
     '<div class="form-group"><label class="form-label">Notiz (optional)</label><input type="text" class="form-input" id="bl-notiz" value="' + escH(b.notiz) + '"></div>' +
@@ -2812,17 +2820,21 @@ function belegSpeichern() {
   belegEntwurfMerken();
   var b = S.belegEntwurf;
   if (!(b.fotos || []).length && !(b.abgelegt || []).length) { alert('Bitte den Beleg fotografieren.'); return; }
+  // Fehlende Angaben liest der Server vom Foto, solange es noch nicht ausgelesen ist
+  var liestNoch = !b.ausgelesen && (b.fotos || []).length;
   if (b.art === 'Tankbeleg') {
     b.center = ''; b.grund = 'Tanken Firmenwagen'; b.betrag = ''; b.ninox = false;
-    if (!b.km) { alert('Bitte den Km-Stand eintragen.'); return; }
+    if (!b.km && !liestNoch && !confirm('Km-Stand fehlt. Trotzdem speichern?')) return;
   } else {
-    b.liter = ''; b.km = ''; b.lieferschein = '';
-    if (!b.grund) { alert('Bitte den Grund eintragen.'); return; }
+    if (b.art) { b.liter = ''; b.km = ''; b.lieferschein = ''; }
+    if (!b.grund && !liestNoch) { alert('Bitte den Grund eintragen.'); return; }
     // Regel von Basti: Grund konkret nach dem Bon, nicht „Reparatur“ oder „Kleinarbeiten“
-    if (BELEG_GRUND_VAGE.test(b.grund) && !confirm('„' + b.grund + '“ ist Basti zu allgemein. Er möchte den Grund konkret nach dem Bon, z. B. „Sanitärbedarf“ oder „Werkzeug + Malerbedarf“.\n\nTrotzdem so speichern?')) return;
+    if (b.grund && BELEG_GRUND_VAGE.test(b.grund) && !confirm('„' + b.grund + '“ ist Basti zu allgemein. Er möchte den Grund konkret nach dem Bon, z. B. „Sanitärbedarf“ oder „Werkzeug + Malerbedarf“.\n\nTrotzdem so speichern?')) return;
     if (/hagebau/i.test(b.haendler) && !b.ninox && !confirm('Hagebau-Rechnungen müssen in Ninox stehen. Noch nicht eingetragen?\n\nOK: trotzdem speichern (Haken später setzen).')) return;
   }
   delete b.bearbeiten;
+  // Gespeichert nach dem Auslesen = von Thomas geprüft
+  if (b.ausgelesen) b.pruefen = false;
   b.geaendert = new Date().toISOString();
   var idx = -1;
   for (var i = 0; i < S.belege.length; i++) { if (S.belege[i].id === b.id) { idx = i; break; } }
@@ -2857,6 +2869,10 @@ function belegFotos(files) {
   });
 }
 
+function belegeZuPruefen() {
+  return (S.belege || []).filter(function(b) { return b && b.pruefen; });
+}
+
 function vBelege() {
   var nachMonat = {};
   (S.belege || []).forEach(function(b) {
@@ -2873,13 +2889,15 @@ function vBelege() {
     return '<div class="lb-panel"><h2>' + name + ' <small>' + liste.length + (liste.length === 1 ? ' Beleg' : ' Belege') + (summe ? ', ' + summe.toFixed(2).replace('.', ',') + ' €' : '') + '</small></h2><ul class="lb-todo">' +
       liste.map(function(b) {
         var tank = b.art === 'Tankbeleg';
-        var rechts = (b.fotos || []).length ? '<span class="lb-pill warn">lädt hoch</span>'
+        var rechts = (b.fotos || []).length ? '<span class="lb-pill warn">wird gelesen</span>'
+          : b.pruefen && b.lesbar === false ? '<span class="lb-pill crit">nicht lesbar</span>'
+          : b.pruefen ? '<span class="lb-pill warn">bitte prüfen</span>'
           : !tank && /hagebau/i.test(b.haendler || '') && !b.ninox ? '<span class="lb-pill crit">Ninox fehlt</span>'
           : '<span class="lb-pill ok">abgelegt</span>';
         var sub = tank ? (b.liter ? b.liter + ' l, ' : '') + 'Km ' + (b.km || '?') + ' (DKV)'
           : (b.center || '') + ' · ' + (b.grund || '') + (b.betrag ? ' · ' + b.betrag + ' €' : '');
         return '<li data-action="beleg-bearbeiten" data-bid="' + escH(b.id) + '"><span class="lb-icon">' + LB_ICON.aufgabe + '</span>' +
-          '<span class="t"><b>' + fmtDate(b.datum) + ' ' + escH(b.art) + (b.haendler ? ' ' + escH(b.haendler) : '') + '</b><span>' + escH(sub) + '</span></span>' + rechts + '</li>';
+          '<span class="t"><b>' + (b.datum ? fmtDate(b.datum) : 'neu') + ' ' + escH(b.art || 'Beleg') + (b.haendler ? ' ' + escH(b.haendler) : '') + '</b><span>' + escH(sub) + '</span></span>' + rechts + '</li>';
       }).join('') + '</ul></div>';
   }).join('');
   if (!html) html = '<div class="lb-panel"><div class="lb-leer">Noch keine Belege. Bon oder Tankbeleg fotografieren, Angaben eintragen, fertig. Am Monatsende baut Claude daraus die Abrechnung.</div></div>';
