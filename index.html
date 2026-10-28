@@ -135,7 +135,7 @@
     .mangel-preview:active { opacity: 0.75; }
     .mangel-preview-text { font-size: 12px; color: var(--crit); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     body.mit-leiste .content { padding-bottom: calc(84px + var(--safe-bottom)); }
-    .tab-leiste { position: fixed; bottom: 0; left: 0; right: 0; z-index: 150; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(20,19,17,0.97); backdrop-filter: blur(10px); border-top: 1px solid var(--border); padding: 4px 4px calc(4px + var(--safe-bottom)); }
+    .tab-leiste { position: fixed; bottom: 0; left: 0; right: 0; z-index: 150; display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(20,19,17,0.97); backdrop-filter: blur(10px); border-top: 1px solid var(--border); padding: 4px 4px calc(4px + var(--safe-bottom)); }
     .tab-leiste button { background: none; border: 0; color: var(--text-light); font-family: inherit; font-size: 11px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 5px; cursor: pointer; position: relative; }
     .tab-leiste button.aktiv { color: var(--primary); }
     .tab-leiste .zahl { position: absolute; top: 2px; left: calc(50% + 6px); background: var(--crit); color: #fff; border-radius: 9px; font-size: 10px; padding: 0 5px; line-height: 16px; min-width: 16px; }
@@ -252,6 +252,12 @@
     .lb-todo li:active { background: var(--band); }
     .lb-todo .t b { display: block; font-size: 14px; }
     .lb-todo .t span { display: block; font-size: 12.5px; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag-liste li { cursor: default; }
+    .tag-haken { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--text-light); background: none; color: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+    .tag-haken.an { background: var(--ok); border-color: var(--ok); color: #fff; }
+    .tag-liste li.erledigt .t b { text-decoration: line-through; color: var(--text-light); }
+    .tag-liste .t span { white-space: normal; }
+    .tag-anruf { border: 0; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; color: #fff; background: var(--ok); border-radius: 999px; padding: 6px 12px; text-decoration: none; white-space: nowrap; }
     .lb-pill { font-family: var(--zahl); font-weight: 600; font-size: 12.5px; border-radius: 999px; padding: 2px 9px; white-space: nowrap; background: var(--band); color: var(--text); font-variant-numeric: tabular-nums; }
     .lb-pill.crit { background: var(--crit-bg); color: var(--crit); } .lb-pill.warn { background: var(--warn-bg); color: var(--warn); } .lb-pill.ok { background: var(--ok-bg); color: var(--ok); }
     .lb-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--band); color: var(--text-light); }
@@ -400,6 +406,7 @@ var S = {
   technikStandort: 'Sendling',
   aufgaben: [],
   vorschlaege: [],
+  tagespunkte: [],
   editAufgabeId: null,
   aufgabenFilter: 'aktiv',
   termineFilter: '90',
@@ -583,6 +590,7 @@ function save() {
     localStorage.setItem('bs2_kontakte', JSON.stringify(S.kontakte));
     localStorage.setItem('bs2_aufgaben', JSON.stringify(S.aufgaben));
     localStorage.setItem('bs2_vorschlaege', JSON.stringify(S.vorschlaege));
+    localStorage.setItem('bs2_tagespunkte', JSON.stringify(S.tagespunkte));
     localStorage.setItem('bs2_srv_url', S.srvUrl);
     localStorage.setItem('bs2_srv_key', S.srvKey);
   } catch(e) { console.warn('Storage full', e); }
@@ -630,6 +638,8 @@ function load() {
     S.aufgaben = ag ? JSON.parse(ag) : clone(AUFGABEN_DEFAULT);
     var vs = localStorage.getItem('bs2_vorschlaege');
     S.vorschlaege = vs ? JSON.parse(vs) : [];
+    var tp = localStorage.getItem('bs2_tagespunkte');
+    S.tagespunkte = tp ? JSON.parse(tp) : [];
     S.intervalle = iv ? JSON.parse(iv) : {};
     S.srvUrl = localStorage.getItem('bs2_srv_url') || '';
     S.srvKey = localStorage.getItem('bs2_srv_key') || '';
@@ -823,6 +833,7 @@ function render() {
     termine: vTerminkalender,
     matrix: vMatrix,
     vorschlaege: vVorschlaege,
+    tag: vMeinTag,
     standort: vStandort
   };
   var fn = views[S.view] || vHome;
@@ -837,7 +848,7 @@ function render() {
 }
 
 /* ── LEISTE UNTEN ── Welche Seite zu welchem Reiter gehört */
-var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', 'maengel-global': 'maengel', termine: 'termine',
+var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', tag: 'tag', 'maengel-global': 'maengel', termine: 'termine',
   mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr',
   matrix: 'mehr', 'qr-codes': 'mehr', settings: 'mehr', hilfe: 'mehr' };
 
@@ -845,6 +856,7 @@ function tabLeisteHtml(aktiv) {
   var nUeber = offeneMaengelAlle().filter(function(it) { return tageUeberfaellig(it.mangel) > 0; }).length;
   var tabs = [
     { id: 'home', action: 'go-home', label: 'Lage', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>' },
+    { id: 'tag', action: 'go-tag', label: 'Mein Tag', zahl: offeneTagespunkte().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 8 8 4"/><polyline points="3 13 5 15 8 11"/><line x1="11" y1="6" x2="21" y2="6"/><line x1="11" y1="13" x2="21" y2="13"/><line x1="11" y1="20" x2="21" y2="20"/><circle cx="5" cy="20" r="1.5"/></svg>' },
     { id: 'maengel', action: 'go-maengel-global', label: 'Mängel', zahl: nUeber, icon: LB_ICON.mangel.replace(/15/g, '22') },
     { id: 'termine', action: 'go-termine', label: 'Termine', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
     { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
@@ -1140,6 +1152,9 @@ function heuteZuTunListe() {
   var nv = offeneVorschlaege().length;
   if (nv) items.push({ prio: 0, tage: 0, icon: 'mail', ton: 'warn', titel: nv + (nv === 1 ? ' Vorschlag' : ' Vorschläge') + ' aus dem Mail-Eingang',
     sub: 'prüfen und als Direktmeldung übernehmen', rechts: 'neu', action: 'go-vorschlaege' });
+  var nt = offeneTagespunkte().length;
+  if (nt) items.push({ prio: 0, tage: 0, icon: 'begehung', ton: 'warn', titel: 'Mein Tag: ' + nt + (nt === 1 ? ' Punkt' : ' Punkte') + ' offen',
+    sub: 'Anrufe und Freigaben vom Fahrt-Zettel abhaken', rechts: 'heute', action: 'go-tag' });
   var alle = offeneMaengelAlle();
   LOCATIONS.forEach(function(loc) {
     var ue = alle.filter(function(it) { return it.insp.standort === loc && tageUeberfaellig(it.mangel) > 0; });
@@ -1986,7 +2001,7 @@ function vHilfe() {
 
     '<div class="section-header">Leiste unten</div>' +
     hSection('⌂', 'Lage, Mängel, Termine, Mehr',
-      'Lage = Startseite mit Standort-Kacheln. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
+      'Lage = Startseite mit Standort-Kacheln. Mein Tag = Punkte vom Fahrt-Zettel (Anrufe, Fragen zum Diktieren, Freigaben) zum Abhaken. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
     hSection('👥', 'Unterweisungen',
       'Brandschutzunterweisungen verwalten. Pro Standort Mitarbeiterliste pflegen, Unterweisungen erfassen und Nachweise als PDF exportieren. Die App zeigt automatisch an wenn die Jahresfrist (DGUV V2) abläuft.') +
     hSection('△', 'Offene Mängel',
@@ -2487,6 +2502,71 @@ function vorschlagVerwerfen(vid) {
   if (!v || v.status !== 'offen') return;
   if (!confirm('Vorschlag verwerfen? Er wird dann nicht mehr angezeigt.')) return;
   v.status = 'verworfen'; v.erledigt = today();
+  save();
+  render();
+}
+
+/* ── MEIN TAG ──
+   Der Server legt um 8:05, 12:25 und 15:40 die Punkte des Fahrt-Zettels an (Bereich tagespunkte
+   im Abgleich, Postfenster). Thomas hakt sie ab, der Haken geht an den Server zurück, damit der
+   nächste Zettel Erledigtes nicht wiederholt. Texte stammen aus Mails, deshalb immer escH. */
+var TAG_ARTEN = [
+  { art: 'anruf', titel: 'Anrufe' },
+  { art: 'diktat', titel: 'Zum Diktieren (per Siri „Auftrag: …“)' },
+  { art: 'freigabe', titel: 'Freigeben (Entwürfe in Mail)' },
+  { art: 'rueckfrage', titel: 'Rückfragen an dich' },
+  { art: 'hirschgarten', titel: 'Hirschgarten (wartet bis zum Mac)' },
+  { art: 'termin', titel: 'Heute wichtig', ohneHaken: true }
+];
+var FENSTER_NAME = { morgen: 'Morgen', mittag: 'Mittag', nachmittag: 'Heimfahrt' };
+
+function offeneTagespunkte() {
+  return (S.tagespunkte || []).filter(function(p) { return p && !p.erledigt && p.art !== 'termin'; });
+}
+
+function vMeinTag() {
+  var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id; })
+    .sort(function(a, b) { return (a.nr || 0) - (b.nr || 0); });
+  var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
+  var sub = neuester.erstellt ? 'Fahrt-Zettel ' + (FENSTER_NAME[neuester.fenster] || '') + ', ' + fmtDate(neuester.datum) + ' ' + escH(neuester.zeit || '') : 'noch kein Fahrt-Zettel';
+  var html = '';
+  TAG_ARTEN.forEach(function(g) {
+    var punkte = alle.filter(function(p) { return p.art === g.art; });
+    if (!punkte.length) return;
+    // Offenes zuerst, Erledigtes darunter
+    punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
+    var offen = g.ohneHaken ? 0 : punkte.filter(function(p) { return !p.erledigt; }).length;
+    html += '<div class="lb-panel"><h2>' + g.titel + (g.ohneHaken ? '' : ' <small>' + (offen ? offen + ' offen' : 'alles erledigt') + '</small>') + '</h2><ul class="lb-todo tag-liste">' +
+      punkte.map(function(p) {
+        var nummer = String(p.nummer || '').replace(/[^0-9+]/g, '');
+        // Thomas telefoniert über die 3CX-App: Nummer kopieren und dort einfügen
+        var rechts = g.art === 'anruf' && nummer.length >= 6 ? '<button class="tag-anruf" data-action="tag-nummer" data-nr="' + nummer + '">Kopieren</button>'
+          : g.art === 'anruf' ? '<span class="lb-pill warn">Nummer fehlt</span>' : '';
+        var haken = g.ohneHaken ? '<span class="lb-icon">' + LB_ICON.begehung + '</span>'
+          : '<button class="tag-haken' + (p.erledigt ? ' an' : '') + '" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="' + (p.erledigt ? 'Haken entfernen' : 'Abhaken') + '">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
+        return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
+          '<span class="t"><b>' + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          (p.text ? '<span>' + escH(p.text) + '</span>' : '') + '</span>' + rechts + '</li>';
+      }).join('') + '</ul></div>';
+  });
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">Noch nichts da. Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
+  return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
+    '<div class="header-sub">' + sub + '</div></div></div>' +
+    '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function tagNummerKopieren(el, nr) {
+  var fertig = function() { el.textContent = 'Kopiert'; setTimeout(function() { el.textContent = 'Kopieren'; }, 2000); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(nr).then(fertig, function() { prompt('Nummer kopieren:', nr); });
+  else prompt('Nummer kopieren:', nr);
+}
+
+function tagespunktHaken(tid) {
+  var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
+  if (!p || p.art === 'termin') return;
+  p.erledigt = !p.erledigt;
+  p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
   save();
   render();
 }
@@ -3131,7 +3211,7 @@ function srvStatusHtml() {
    Weicht der Fingerabdruck beim Speichern ab, gilt der Eintrag als geändert und wird gesendet.
    Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
    haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
-var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege'];
+var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege', 'tagespunkte'];
 var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc', 'grussName'];
 var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
 
@@ -4027,6 +4107,9 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-unterweisungen') { nav('unterweisungen'); return; }
   if (a.action === 'go-technik') { S.technikStandort = a.loc || S.lastStandort || S.technikStandort; nav('technik'); return; }
   if (a.action === 'go-vorschlaege') { nav('vorschlaege'); return; }
+  if (a.action === 'go-tag') { nav('tag'); return; }
+  if (a.action === 'tag-haken') { tagespunktHaken(a.tid); return; }
+  if (a.action === 'tag-nummer') { tagNummerKopieren(el, a.nr); return; }
   if (a.action === 'go-standort') { S.standortAnsicht = a.loc || S.lastStandort; S.lastStandort = S.standortAnsicht; nav('standort'); return; }
   if (a.action === 'heute-alle') { S.heuteAlle = !S.heuteAlle; render(); return; }
   if (a.action === 'vorschlag-uebernehmen') { vorschlagUebernehmen(a.vid); return; }
@@ -5483,6 +5566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // QR-Code am Standort: direkt die Standortseite öffnen
     S.lastStandort = locParam; S.standortAnsicht = locParam; S.view = 'standort';
   }
+  if (getUrlParam('seite') === 'tag') S.view = 'tag';
   render();
   // Fotos liegen in IndexedDB und werden asynchron nachgeladen, dann einmal neu rendern
   loadPhotosAsync().then(function() {
