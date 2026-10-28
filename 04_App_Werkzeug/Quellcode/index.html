@@ -3621,6 +3621,11 @@ function syncNow(manual) {
   if (!srvConfigured()) { if (manual) alert('Bitte zuerst Server-Adresse und Schlüssel eintragen.'); return Promise.resolve(); }
   if (!S.photosLoaded) { syncTimer = setTimeout(function() { syncNow(manual); }, 3000); return Promise.resolve(); }
   if (syncBusy) { syncAgain = true; return Promise.resolve(); }
+  // Neue Bereiche in dieser App-Fassung: alles noch einmal wie beim ersten Mal abgleichen. Sonst fehlen
+  // Einträge, die der Server schon angelegt hatte, als hier noch die alte Fassung lief (sie hat sie übersprungen).
+  if (localStorage.getItem('bs2_sync_listen') !== SYNC_LISTEN.join(',')) {
+    try { localStorage.setItem('bs2_sync_rev', '0'); localStorage.removeItem('bs2_sync_init'); localStorage.setItem('bs2_sync_listen', SYNC_LISTEN.join(',')); } catch(e) {}
+  }
   syncTrack();
   var meta = syncMetaLaden() || {};
   var akt = syncEintraege();
