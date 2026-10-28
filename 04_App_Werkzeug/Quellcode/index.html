@@ -5572,6 +5572,24 @@ function doExport() {
 }
 
 /* ── SCHNELLMELDUNG: PDF-EXPORT ── */
+/* ── NEUE FASSUNG LADEN ──
+   GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
+   Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
+   APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
+var APP_STAND = '2026-10-28d';
+function appNeueFassungPruefen() {
+  if (!window.fetch) return;
+  fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
+    var m = t.match(/var APP_STAND = '([^']+)'/);
+    if (!m || m[1] === APP_STAND) return;
+    // Schutz vor Endlosschleife, falls die neue Fassung trotzdem aus dem Zwischenspeicher käme
+    try { if (sessionStorage.getItem('bs2_neu_geladen') === m[1]) return; sessionStorage.setItem('bs2_neu_geladen', m[1]); } catch(e) { return; }
+    var el = document.activeElement;
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]) + (S.view === 'tag' ? '&seite=tag' : ''));
+  }).catch(function() {});
+}
+
 function aktuellerSchnellmangel() {
   var insp = S.currentInspection;
   if (!insp) return null;
@@ -5962,7 +5980,9 @@ document.addEventListener('DOMContentLoaded', function() {
         else { clearTimeout(srvTimer); srvTimer = setTimeout(function() { srvTimer = null; serverBackupNow(false); }, 60000); }
       }
       if (document.visibilityState === 'visible' || syncOffen()) syncNow(false);
+      if (document.visibilityState === 'visible') appNeueFassungPruefen();
     });
+    appNeueFassungPruefen();
     // Abgleich: beim Start und danach jede Minute, solange die App sichtbar ist
     if (srvConfigured()) syncNow(false);
     setInterval(function() { if (document.visibilityState === 'visible') syncNow(false); }, 60000);
