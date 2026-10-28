@@ -271,6 +271,7 @@
 <div id="err-banner"></div>
 <div id="app"></div>
 <input type="file" accept="image/*" id="photo-input" style="position:absolute;left:-9999px;visibility:hidden;" multiple>
+<input type="file" accept="image/*" id="beleg-input" style="position:absolute;left:-9999px;visibility:hidden;" multiple>
 <input type="file" accept=".csv,text/csv" id="csv-input" style="position:absolute;left:-9999px;visibility:hidden;">
 <input type="file" accept=".json,application/json" id="backup-input" style="position:absolute;left:-9999px;visibility:hidden;">
 <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" id="xlsx-input" style="position:absolute;left:-9999px;visibility:hidden;">
@@ -407,6 +408,9 @@ var S = {
   aufgaben: [],
   vorschlaege: [],
   tagespunkte: [],
+  vorgaenge: [],
+  belege: [],
+  belegEntwurf: null,
   editAufgabeId: null,
   aufgabenFilter: 'aktiv',
   termineFilter: '90',
@@ -591,6 +595,8 @@ function save() {
     localStorage.setItem('bs2_aufgaben', JSON.stringify(S.aufgaben));
     localStorage.setItem('bs2_vorschlaege', JSON.stringify(S.vorschlaege));
     localStorage.setItem('bs2_tagespunkte', JSON.stringify(S.tagespunkte));
+    localStorage.setItem('bs2_vorgaenge', JSON.stringify(S.vorgaenge));
+    localStorage.setItem('bs2_belege', JSON.stringify(S.belege));
     localStorage.setItem('bs2_srv_url', S.srvUrl);
     localStorage.setItem('bs2_srv_key', S.srvKey);
   } catch(e) { console.warn('Storage full', e); }
@@ -640,6 +646,10 @@ function load() {
     S.vorschlaege = vs ? JSON.parse(vs) : [];
     var tp = localStorage.getItem('bs2_tagespunkte');
     S.tagespunkte = tp ? JSON.parse(tp) : [];
+    var vg = localStorage.getItem('bs2_vorgaenge');
+    S.vorgaenge = vg ? JSON.parse(vg) : [];
+    var bl = localStorage.getItem('bs2_belege');
+    S.belege = bl ? JSON.parse(bl) : [];
     S.intervalle = iv ? JSON.parse(iv) : {};
     S.srvUrl = localStorage.getItem('bs2_srv_url') || '';
     S.srvKey = localStorage.getItem('bs2_srv_key') || '';
@@ -834,6 +844,10 @@ function render() {
     matrix: vMatrix,
     vorschlaege: vVorschlaege,
     tag: vMeinTag,
+    vorgaenge: vVorgaenge,
+    'vorgang-form': vVorgangForm,
+    belege: vBelege,
+    'beleg-form': vBelegForm,
     standort: vStandort
   };
   var fn = views[S.view] || vHome;
@@ -849,7 +863,7 @@ function render() {
 
 /* ── LEISTE UNTEN ── Welche Seite zu welchem Reiter gehört */
 var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', tag: 'tag', 'maengel-global': 'maengel', termine: 'termine',
-  mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr',
+  mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr', vorgaenge: 'mehr', belege: 'mehr',
   matrix: 'mehr', 'qr-codes': 'mehr', settings: 'mehr', hilfe: 'mehr' };
 
 function tabLeisteHtml(aktiv) {
@@ -859,7 +873,7 @@ function tabLeisteHtml(aktiv) {
     { id: 'tag', action: 'go-tag', label: 'Mein Tag', zahl: offeneTagespunkte().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 8 8 4"/><polyline points="3 13 5 15 8 11"/><line x1="11" y1="6" x2="21" y2="6"/><line x1="11" y1="13" x2="21" y2="13"/><line x1="11" y1="20" x2="21" y2="20"/><circle cx="5" cy="20" r="1.5"/></svg>' },
     { id: 'maengel', action: 'go-maengel-global', label: 'Mängel', zahl: nUeber, icon: LB_ICON.mangel.replace(/15/g, '22') },
     { id: 'termine', action: 'go-termine', label: 'Termine', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
-    { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
+    { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length + ueberfaelligeVorgaenge().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
   ];
   return '<nav class="tab-leiste">' + tabs.map(function(t) {
     return '<button class="' + (t.id === aktiv ? 'aktiv' : '') + '" data-action="' + t.action + '">' + t.icon + '<span>' + t.label + '</span>' +
@@ -869,11 +883,14 @@ function tabLeisteHtml(aktiv) {
 
 function vMehr() {
   var nv = offeneVorschlaege().length;
+  var nu = ueberfaelligeVorgaenge().length;
   var eintraege = [
     { action: 'go-aufgaben', icon: 'aufgabe', titel: 'Aufgaben', sub: S.aufgaben.filter(function(t) { return t.status !== 'Erledigt'; }).length + ' offen' },
     { action: 'go-technik', icon: 'technik', titel: 'Technik', sub: 'Anlagen, Wartungsverträge, Ansprechpartner' },
     { action: 'go-unterweisungen', icon: 'unterweisung', titel: 'Unterweisungen', sub: 'Mitarbeiter und Nachweise je Standort' },
     { action: 'go-vorschlaege', icon: 'mail', titel: 'Vorschläge aus Mails', sub: nv ? nv + ' neu' : 'keine neuen', ton: nv ? 'warn' : '' },
+    { action: 'go-vorgaenge', icon: 'mail', titel: 'Mail-Vorgänge', sub: offeneVorgaenge().length + ' warten auf Antwort' + (nu ? ', ' + nu + ' überfällig' : ''), ton: nu ? 'crit' : '' },
+    { action: 'go-belege', icon: 'aufgabe', titel: 'Belege', sub: 'fotografieren für die Techniker-Abrechnung' },
     { action: 'go-matrix', icon: 'begehung', titel: 'Compliance-Matrix', sub: 'alle Standorte als Tabelle' },
     { action: 'go-qr', icon: 'begehung', titel: 'QR-Codes', sub: 'zum Aushang je Standort' },
     { action: 'go-settings', icon: 'technik', titel: 'Einstellungen', sub: 'Allgemein, Server, Daten' },
@@ -1155,6 +1172,12 @@ function heuteZuTunListe() {
   var nt = offeneTagespunkte().length;
   if (nt) items.push({ prio: 0, tage: 0, icon: 'begehung', ton: 'warn', titel: 'Mein Tag: ' + nt + (nt === 1 ? ' Punkt' : ' Punkte') + ' offen',
     sub: 'Anrufe und Freigaben vom Fahrt-Zettel abhaken', rechts: 'heute', action: 'go-tag' });
+  var nu = ueberfaelligeVorgaenge().length;
+  if (nu) items.push({ prio: 1, tage: 0, icon: 'mail', ton: 'crit', titel: nu + (nu === 1 ? ' Mail-Vorgang' : ' Mail-Vorgänge') + ' ohne Antwort',
+    sub: 'Frist vorbei, Erinnerung kommt werktags 8:30', rechts: 'überfällig', action: 'go-vorgaenge' });
+  var na = (S.vorgaenge || []).filter(function(v) { return v && v.art === 'antwort' && !v.aktion; }).length;
+  if (na) items.push({ prio: 2, tage: 0, icon: 'mail', ton: 'ok', titel: na + (na === 1 ? ' Antwort' : ' Antworten') + ' eingegangen',
+    sub: 'Mail-Vorgang lesen und als erledigt markieren', rechts: 'neu', action: 'go-vorgaenge' });
   var alle = offeneMaengelAlle();
   LOCATIONS.forEach(function(loc) {
     var ue = alle.filter(function(it) { return it.insp.standort === loc && tageUeberfaellig(it.mangel) > 0; });
@@ -2001,11 +2024,15 @@ function vHilfe() {
 
     '<div class="section-header">Leiste unten</div>' +
     hSection('⌂', 'Lage, Mängel, Termine, Mehr',
-      'Lage = Startseite mit Standort-Kacheln. Mein Tag = Punkte vom Fahrt-Zettel (Anrufe, Fragen zum Diktieren, Freigaben) zum Abhaken. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
+      'Lage = Startseite mit Standort-Kacheln. Mein Tag = Punkte vom Fahrt-Zettel (Anrufe, Fragen zum Diktieren, Freigaben) zum Abhaken. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Mail-Vorgänge, Belege, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
     hSection('👥', 'Unterweisungen',
       'Brandschutzunterweisungen verwalten. Pro Standort Mitarbeiterliste pflegen, Unterweisungen erfassen und Nachweise als PDF exportieren. Die App zeigt automatisch an wenn die Jahresfrist (DGUV V2) abläuft.') +
     hSection('△', 'Offene Mängel',
       'Zeigt alle nicht behobenen Mängel nach Standort gruppiert, überfällige zuerst. Wurde ein Mangel in eine neue Begehung übernommen, zählt nur der neueste Eintrag. Mängel können hier direkt als behoben markiert werden.') +
+    hSection('✉️', 'Mail-Vorgänge',
+      'Anfragen, auf die du eine Antwort erwartest (Nachfass-Liste). Der Server prüft werktags um 8:30, ob eine Antwort da ist, und entwirft nach der Frist eine Erinnerung im Brandschutz-Gmail (gesendet wird nichts). Erledigt, Jetzt nachfassen und Frist ändern gehen an den Server und sind nach ein paar Minuten übernommen. Neue Anfrage: Betreff genau wie in der Mail eintragen.') +
+    hSection('🧾', 'Belege',
+      'Bon, Rechnung oder Tankbeleg fotografieren und Art, Center, Grund und Betrag eintragen (bei Tankbelegen Liter, Km-Stand und Lieferschein-Nr., Betrag kommt über DKV). Die App warnt bei zu allgemeinem Grund und bei Hagebau ohne Ninox-Eintrag. Der Server legt die Fotos innerhalb von 10 Minuten in die iCloud unter 01_Zentral/Rechnungen/<Monat> und entfernt sie danach aus der App. Am Monatsende baut Claude daraus die Abrechnung.') +
     hSection('?', 'Hilfe',
       'Diese Seite.') +
     hSection('🔧', 'Technik',
@@ -2569,6 +2596,298 @@ function tagespunktHaken(tid) {
   p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
   save();
   render();
+}
+
+/* ── MAIL-VORGÄNGE ──
+   Anfragen, auf die eine Antwort erwartet wird (Nachfass-Liste auf dem Server). Der Server spielt
+   die Liste alle 10 Minuten als Bereich vorgaenge ein und prüft werktags um 8:30 auf Antworten.
+   Die App schickt nur Wünsche zurück (Feld aktion): erledigt, nachfassen, frist, neu. Der Server
+   übernimmt sie in die Liste und schreibt den Vorgang neu. Texte stammen aus Mails: immer escH. */
+function offeneVorgaenge() {
+  return (S.vorgaenge || []).filter(function(v) { return v && (v.art === 'offen' || v.art === 'erinnert' || v.art === 'antwort'); });
+}
+
+function ueberfaelligeVorgaenge() {
+  return (S.vorgaenge || []).filter(function(v) { return v && v.art === 'offen' && !v.aktion && v.frist && v.frist < today(); });
+}
+
+var VORGANG_AKTION = { erledigt: 'wird als erledigt markiert', nachfassen: 'Erinnerung wird entworfen', frist: 'neue Frist wird eingetragen', neu: 'wird auf die Liste gesetzt' };
+
+function vVorgaenge() {
+  var liste = (S.vorgaenge || []).filter(function(v) { return v && v.id; });
+  var gruppen = [
+    { art: 'antwort', titel: 'Antwort da', sub: 'lesen und als erledigt markieren' },
+    { art: 'offen', titel: 'Wartet auf Antwort' },
+    { art: 'erinnert', titel: 'Erinnerung entworfen', sub: 'Entwurf in Mail freigeben' }
+  ];
+  var html = '';
+  var wartend = liste.filter(function(v) { return v.art === 'neu'; });
+  if (wartend.length) {
+    html += '<div class="lb-panel"><h2>Wird übernommen <small>in ein paar Minuten</small></h2><ul class="lb-todo">' + wartend.map(function(v) {
+      return '<li><span class="lb-icon">' + LB_ICON.mail + '</span><span class="t"><b>' + escH(v.betreff) + '</b><span>an ' + escH(v.an) + '</span></span></li>';
+    }).join('') + '</ul></div>';
+  }
+  gruppen.forEach(function(g) {
+    var punkte = liste.filter(function(v) { return v.art === g.art; })
+      .sort(function(a, b) { return (a.frist || '').localeCompare(b.frist || ''); });
+    if (!punkte.length) return;
+    html += '<div class="lb-panel"><h2>' + g.titel + ' <small>' + (g.sub || punkte.length) + '</small></h2>' + punkte.map(function(v) {
+      var ueber = v.art === 'offen' && v.frist && v.frist < today();
+      var pill = v.art === 'offen' ? '<span class="lb-pill ' + (ueber ? 'crit' : '') + '">Frist ' + fmtDate(v.frist) + '</span>'
+        : '<span class="lb-pill ' + (v.art === 'antwort' ? 'ok' : 'warn') + '">' + escH(v.status) + '</span>';
+      var knoepfe = v.aktion
+        ? '<div style="font-size:12px;color:var(--text-light);margin-top:8px">Gesendet an den Server: ' + (VORGANG_AKTION[v.aktion] || '') + '.</div>'
+        : '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' +
+          '<button class="btn-outline" style="flex:1;min-width:90px;padding:8px" data-action="vorgang-erledigt" data-vid="' + escH(v.id) + '">Erledigt</button>' +
+          (v.art === 'offen' ? '<button class="btn-outline" style="flex:1;min-width:90px;padding:8px" data-action="vorgang-nachfassen" data-vid="' + escH(v.id) + '">Jetzt nachfassen</button>' : '') +
+          '<button class="btn-outline" style="flex:1;min-width:90px;padding:8px" data-action="vorgang-frist" data-vid="' + escH(v.id) + '">' + (v.art === 'offen' ? 'Frist ändern' : 'Weiter warten') + '</button></div>';
+      return '<div class="card" style="margin:0 0 10px">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b style="font-size:14px">' + escH(v.betreff) + '</b>' + pill + '</div>' +
+        '<div style="font-size:12.5px;color:var(--text-light);margin-top:4px;line-height:1.5">an ' + escH(v.an) + (v.cc ? ', Kopie ' + escH(v.cc) : '') +
+        '<br>gesendet ' + fmtDate(v.gesendet) + (v.art !== 'offen' && v.frist ? ', Frist ' + fmtDate(v.frist) : '') + '</div>' +
+        (v.zusatz ? '<div style="font-size:12.5px;margin-top:6px">Zusatzfrage: ' + escH(v.zusatz) + '</div>' : '') + knoepfe + '</div>';
+    }).join('') + '</div>';
+  });
+  var fertig = liste.filter(function(v) { return v.art === 'erledigt'; }).slice(-10).reverse();
+  if (fertig.length) {
+    html += '<div class="lb-panel"><h2>Erledigt <small>die letzten ' + fertig.length + '</small></h2><ul class="lb-todo">' + fertig.map(function(v) {
+      return '<li class="erledigt"><span class="lb-icon">' + LB_ICON.begehung + '</span><span class="t"><b>' + escH(v.betreff) + '</b><span>' + escH(v.status) + '</span></span></li>';
+    }).join('') + '</ul></div>';
+  }
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">Keine Vorgänge. Neue Anfrage unten eintragen oder Claude sagen „auf die Nachfass-Liste setzen“.</div></div>';
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Mail-Vorgänge</div><div class="header-sub">warten auf Antwort, Erinnerung werktags 8:30</div></div></div>' +
+    '<div class="content lb">' + html +
+    '<button class="btn-primary" style="width:100%" data-action="vorgang-neu">Neue Anfrage eintragen</button>' +
+    '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function vVorgangForm() {
+  var in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="go-vorgaenge" aria-label="Abbrechen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Neue Anfrage</div><div class="header-sub">auf die Nachfass-Liste</div></div>' +
+    '<button class="text-btn" data-action="vorgang-speichern">Speichern</button></div>' +
+    '<div class="content"><div class="card">' +
+    '<div style="font-size:12.5px;color:var(--text-light);margin-bottom:10px">Für eine Mail, die du schon geschickt hast. Der Betreff muss genau wie in der Mail sein, daran erkennt der Server die Antwort.</div>' +
+    '<div class="form-group"><label class="form-label">Betreff (genau wie in der Mail)</label><input type="text" class="form-input" id="vg-betreff"></div>' +
+    '<div class="form-group"><label class="form-label">An (Mailadresse)</label><input type="email" class="form-input" id="vg-an" autocapitalize="off"></div>' +
+    '<div class="form-group"><label class="form-label">Kopie (optional, mit Komma trennen)</label><input type="text" class="form-input" id="vg-cc" autocapitalize="off"></div>' +
+    '<div style="display:flex;gap:8px"><div class="form-group" style="flex:2"><label class="form-label">Anrede für die Erinnerung</label><input type="text" class="form-input" id="vg-anrede" placeholder="Guten Tag Herr …"></div>' +
+    '<div class="form-group" style="flex:1"><label class="form-label">Form</label><select class="form-select" id="vg-form"><option value="sie">Sie</option><option value="du">du</option></select></div></div>' +
+    '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Gesendet am</label><input type="date" class="form-input" id="vg-gesendet" value="' + today() + '"></div>' +
+    '<div class="form-group" style="flex:1"><label class="form-label">Antwort bis</label><input type="date" class="form-input" id="vg-frist" value="' + in7 + '"></div></div>' +
+    '<div class="form-group"><label class="form-label">Zusatzfrage für die Erinnerung (optional)</label><textarea class="form-textarea" id="vg-zusatz"></textarea></div>' +
+    '</div><div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function vorgangFinden(vid) {
+  return (S.vorgaenge || []).filter(function(v) { return v && v.id === vid; })[0] || null;
+}
+
+function vorgangAktion(vid, aktion) {
+  var v = vorgangFinden(vid);
+  if (!v || v.aktion) return;
+  if (aktion === 'erledigt' && !confirm('„' + v.betreff + '“ als erledigt markieren? Der Server fasst dann nicht mehr nach.')) return;
+  if (aktion === 'nachfassen' && !confirm('Jetzt eine Erinnerung an ' + v.an + ' entwerfen? Der Entwurf liegt in ein paar Minuten im Brandschutz-Gmail, gesendet wird nichts.')) return;
+  if (aktion === 'frist') {
+    var vorschlag = fmtDate(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+    var ein = prompt('Neue Frist (TT.MM.JJJJ). Bis dahin wartet der Server auf eine Antwort.', vorschlag);
+    if (!ein) return;
+    var m = ein.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!m) { alert('Bitte als TT.MM.JJJJ eingeben.'); return; }
+    v.neueFrist = m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  v.aktion = aktion;
+  v.aktionAm = new Date().toISOString();
+  save();
+  render();
+}
+
+function vorgangSpeichern() {
+  var wert = function(id) { return ((document.getElementById(id) || {}).value || '').replace(/[<>|]/g, '').trim(); };
+  var betreff = wert('vg-betreff'), an = wert('vg-an');
+  if (!betreff) { alert('Bitte den Betreff eintragen.'); return; }
+  if (an.indexOf('@') === -1) { alert('Bitte eine Mailadresse bei „An“ eintragen.'); return; }
+  S.vorgaenge.push({ id: 'vn-' + uid(), art: 'neu', aktion: 'neu', aktionAm: new Date().toISOString(), betreff: betreff, an: an,
+    cc: wert('vg-cc'), anrede: wert('vg-anrede'), form: wert('vg-form') || 'sie', gesendet: wert('vg-gesendet') || today(),
+    frist: wert('vg-frist'), zusatz: wert('vg-zusatz') });
+  save();
+  nav('vorgaenge');
+}
+
+/* ── BELEGE FÜR DIE TECHNIKER-ABRECHNUNG ──
+   Beleg fotografieren und die Angaben gleich so eintragen, wie Basti sie in der Abrechnung
+   braucht (Grund konkret nach dem Bon, Center-Kürzel wie in Ninox). Der Server legt die Fotos
+   alle 10 Minuten in die iCloud (01_Zentral/Rechnungen/<Monat>) und entfernt sie danach aus der
+   App, damit der Speicher auf dem Gerät nicht vollläuft. Tankbelege laufen über DKV: ohne Betrag. */
+var BELEG_ARTEN = ['Kassenbon', 'Rechnung', 'Tankbeleg', 'Parkticket', 'Sonstiges'];
+var BELEG_CENTER = [['HG', 'Hirschgarten'], ['SE', 'Sendling'], ['BR', 'Brunnthal'], ['EG', 'Englischer Garten'], ['ED', 'Erding'],
+  ['MM', 'München Mitte'], ['NO', 'München Nord'], ['TH', 'Theresienhöhe'], ['TR', 'Trudering'], ['W12', 'WERK12'], ['ELI087', 'Elisabethstraße']];
+var BELEG_GRUND_VAGE = /^(reparatur(en)?|kleinarbeiten|kleinmaterial|material|diverses|sonstiges|einkauf|bedarf)$/i;
+
+function belegEntwurfLaden() {
+  if (S.belegEntwurf) return S.belegEntwurf;
+  try { S.belegEntwurf = JSON.parse(localStorage.getItem('bs2_beleg_entwurf') || 'null'); } catch(e) { S.belegEntwurf = null; }
+  return S.belegEntwurf;
+}
+
+function belegEntwurfMerken() {
+  // Vor dem Öffnen der Kamera sichern: iOS lädt die Seite dabei manchmal neu
+  var b = S.belegEntwurf;
+  if (!b) return;
+  ['art', 'haendler', 'center', 'datum', 'grund', 'betrag', 'liter', 'km', 'lieferschein', 'notiz'].forEach(function(k) {
+    var el = document.getElementById('bl-' + k);
+    if (el) b[k] = el.value.replace(/[<>]/g, '').trim();
+  });
+  var ninox = document.getElementById('bl-ninox');
+  if (ninox) b.ninox = ninox.checked;
+  try { localStorage.setItem('bs2_beleg_entwurf', JSON.stringify(b)); } catch(e) { console.warn('Beleg-Entwurf nicht gesichert', e); }
+}
+
+function belegNeu() {
+  var letzter = (S.belege || []).slice(-1)[0] || {};
+  S.belegEntwurf = { id: 'b-' + uid(), art: 'Kassenbon', haendler: '', center: letzter.center || 'HG', datum: today(), grund: '', betrag: '',
+    ninox: false, liter: '', km: '', lieferschein: '', notiz: '', fotos: [] };
+  try { localStorage.setItem('bs2_beleg_entwurf', JSON.stringify(S.belegEntwurf)); } catch(e) {}
+  nav('beleg-form');
+}
+
+function belegBearbeiten(bid) {
+  var b = (S.belege || []).filter(function(x) { return x && x.id === bid; })[0];
+  if (!b) return;
+  S.belegEntwurf = clone(b);
+  S.belegEntwurf.bearbeiten = true;
+  nav('beleg-form');
+}
+
+function belegArtWechsel(art) {
+  belegEntwurfMerken();
+  S.belegEntwurf.art = art;
+  render();
+}
+
+function vBelegForm() {
+  var b = belegEntwurfLaden();
+  if (!b) { S.view = 'belege'; return vBelege(); }
+  var tank = b.art === 'Tankbeleg';
+  var opt = function(liste, wert) {
+    return liste.map(function(x) {
+      var v = Array.isArray(x) ? x[0] : x, l = Array.isArray(x) ? x[0] + ' – ' + x[1] : x;
+      return '<option value="' + v + '"' + (v === wert ? ' selected' : '') + '>' + l + '</option>';
+    }).join('');
+  };
+  var fotosHtml = (b.fotos || []).map(function(f, i) {
+    return '<div class="photo-thumb-wrapper"><img class="photo-thumb" src="' + f + '" alt="Beleg ' + (i + 1) + '">' +
+      '<button class="photo-delete" data-action="beleg-foto-weg" data-idx="' + i + '">&times;</button></div>';
+  }).join('') + '<button class="photo-add-btn" data-action="beleg-foto">' +
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>';
+  var abgelegt = (b.abgelegt || []).length ? '<div style="font-size:12px;color:var(--text-light);margin-top:8px">In der iCloud abgelegt: ' + escH(b.abgelegt.join(', ')) + '</div>' : '';
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="beleg-abbrechen" aria-label="Abbrechen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">' + (b.bearbeiten ? 'Beleg ändern' : 'Neuer Beleg') + '</div><div class="header-sub">für die Techniker-Abrechnung</div></div>' +
+    '<button class="text-btn" data-action="beleg-speichern">Speichern</button></div>' +
+    '<div class="content"><div class="card">' +
+    '<div class="form-group"><label class="form-label">Foto' + (tank ? '' : ' (Hagebau: Rechnung und Bon)') + '</label><div class="photo-grid">' + fotosHtml + '</div>' + abgelegt + '</div>' +
+    '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Art</label>' +
+    '<select class="form-select" id="bl-art" onchange="belegArtWechsel(this.value)">' + opt(BELEG_ARTEN, b.art) + '</select></div>' +
+    '<div class="form-group" style="flex:1"><label class="form-label">Datum</label><input type="date" class="form-input" id="bl-datum" value="' + escH(b.datum) + '"></div></div>' +
+    '<div class="form-group"><label class="form-label">' + (tank ? 'Tankstelle' : 'Geschäft') + '</label><input type="text" class="form-input" id="bl-haendler" value="' + escH(b.haendler) + '" placeholder="' + (tank ? 'z. B. Shell' : 'z. B. Hagebau') + '"></div>' +
+    (tank
+      ? '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Liter</label><input type="text" inputmode="decimal" class="form-input" id="bl-liter" value="' + escH(b.liter) + '"></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Km-Stand</label><input type="text" inputmode="numeric" class="form-input" id="bl-km" value="' + escH(b.km) + '"></div></div>' +
+        '<div class="form-group"><label class="form-label">Lieferschein-Nr.</label><input type="text" inputmode="numeric" class="form-input" id="bl-lieferschein" value="' + escH(b.lieferschein) + '"></div>' +
+        '<div style="font-size:12.5px;color:var(--text-light)">Betrag kommt über die DKV-Abrechnung. Tankbelege als Kopie zur Abrechnung, nicht in Ninox.</div>'
+      : '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">Center</label><select class="form-select" id="bl-center">' + opt(BELEG_CENTER, b.center) + '</select></div>' +
+        '<div class="form-group" style="flex:1"><label class="form-label">Betrag (€)</label><input type="text" inputmode="decimal" class="form-input" id="bl-betrag" value="' + escH(b.betrag) + '"></div></div>' +
+        '<div class="form-group"><label class="form-label">Grund (konkret nach dem Bon)</label><input type="text" class="form-input" id="bl-grund" value="' + escH(b.grund) + '" placeholder="z. B. Sanitärbedarf, Werkzeug + Malerbedarf"></div>' +
+        '<label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:4px 0 8px"><input type="checkbox" id="bl-ninox"' + (b.ninox ? ' checked' : '') + '> In Ninox eingetragen</label>') +
+    '<div class="form-group"><label class="form-label">Notiz (optional)</label><input type="text" class="form-input" id="bl-notiz" value="' + escH(b.notiz) + '"></div>' +
+    '</div>' + (b.bearbeiten ? '<div style="padding:0 0 12px"><button class="btn-danger" data-action="beleg-loeschen">Beleg löschen</button></div>' : '') +
+    '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function belegSpeichern() {
+  belegEntwurfMerken();
+  var b = S.belegEntwurf;
+  if (!(b.fotos || []).length && !(b.abgelegt || []).length) { alert('Bitte den Beleg fotografieren.'); return; }
+  if (b.art === 'Tankbeleg') {
+    b.center = ''; b.grund = 'Tanken Firmenwagen'; b.betrag = ''; b.ninox = false;
+    if (!b.km) { alert('Bitte den Km-Stand eintragen.'); return; }
+  } else {
+    b.liter = ''; b.km = ''; b.lieferschein = '';
+    if (!b.grund) { alert('Bitte den Grund eintragen.'); return; }
+    // Regel von Basti: Grund konkret nach dem Bon, nicht „Reparatur“ oder „Kleinarbeiten“
+    if (BELEG_GRUND_VAGE.test(b.grund) && !confirm('„' + b.grund + '“ ist Basti zu allgemein. Er möchte den Grund konkret nach dem Bon, z. B. „Sanitärbedarf“ oder „Werkzeug + Malerbedarf“.\n\nTrotzdem so speichern?')) return;
+    if (/hagebau/i.test(b.haendler) && !b.ninox && !confirm('Hagebau-Rechnungen müssen in Ninox stehen. Noch nicht eingetragen?\n\nOK: trotzdem speichern (Haken später setzen).')) return;
+  }
+  delete b.bearbeiten;
+  b.geaendert = new Date().toISOString();
+  var idx = -1;
+  for (var i = 0; i < S.belege.length; i++) { if (S.belege[i].id === b.id) { idx = i; break; } }
+  if (idx === -1) { b.erstellt = b.geaendert; S.belege.push(b); } else S.belege[idx] = b;
+  S.belegEntwurf = null;
+  try { localStorage.removeItem('bs2_beleg_entwurf'); } catch(e) {}
+  save();
+  nav('belege');
+}
+
+function belegFotos(files) {
+  var b = S.belegEntwurf;
+  if (!b) return;
+  var offen = files.length;
+  files.forEach(function(file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var img = new Image();
+      img.onload = function() {
+        // Belege müssen lesbar bleiben: größer als Mangelfotos, aber unter etwa 300 KB
+        var MAX = 1600, w = img.width, h = img.height;
+        if (Math.max(w, h) > MAX) { var f = MAX / Math.max(w, h); w = Math.round(w * f); h = Math.round(h * f); }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        b.fotos.push(canvas.toDataURL('image/jpeg', 0.7));
+        if (--offen === 0) { try { localStorage.setItem('bs2_beleg_entwurf', JSON.stringify(b)); } catch(e) {} render(); }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function vBelege() {
+  var nachMonat = {};
+  (S.belege || []).forEach(function(b) {
+    if (!b || !b.id) return;
+    var m = String(b.datum || '').slice(0, 7) || 'ohne Datum';
+    (nachMonat[m] = nachMonat[m] || []).push(b);
+  });
+  var monate = Object.keys(nachMonat).sort().reverse();
+  var MONAT = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  var html = monate.map(function(m) {
+    var liste = nachMonat[m].sort(function(a, b) { return (b.datum || '').localeCompare(a.datum || ''); });
+    var summe = liste.reduce(function(s, b) { return s + (parseFloat(String(b.betrag || '').replace(',', '.')) || 0); }, 0);
+    var name = /^\d{4}-\d{2}$/.test(m) ? MONAT[parseInt(m.slice(5), 10) - 1] + ' ' + m.slice(0, 4) : m;
+    return '<div class="lb-panel"><h2>' + name + ' <small>' + liste.length + (liste.length === 1 ? ' Beleg' : ' Belege') + (summe ? ', ' + summe.toFixed(2).replace('.', ',') + ' €' : '') + '</small></h2><ul class="lb-todo">' +
+      liste.map(function(b) {
+        var tank = b.art === 'Tankbeleg';
+        var rechts = (b.fotos || []).length ? '<span class="lb-pill warn">lädt hoch</span>'
+          : !tank && /hagebau/i.test(b.haendler || '') && !b.ninox ? '<span class="lb-pill crit">Ninox fehlt</span>'
+          : '<span class="lb-pill ok">abgelegt</span>';
+        var sub = tank ? (b.liter ? b.liter + ' l, ' : '') + 'Km ' + (b.km || '?') + ' (DKV)'
+          : (b.center || '') + ' · ' + (b.grund || '') + (b.betrag ? ' · ' + b.betrag + ' €' : '');
+        return '<li data-action="beleg-bearbeiten" data-bid="' + escH(b.id) + '"><span class="lb-icon">' + LB_ICON.aufgabe + '</span>' +
+          '<span class="t"><b>' + fmtDate(b.datum) + ' ' + escH(b.art) + (b.haendler ? ' ' + escH(b.haendler) : '') + '</b><span>' + escH(sub) + '</span></span>' + rechts + '</li>';
+      }).join('') + '</ul></div>';
+  }).join('');
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">Noch keine Belege. Bon oder Tankbeleg fotografieren, Angaben eintragen, fertig. Am Monatsende baut Claude daraus die Abrechnung.</div></div>';
+  return '<div class="header header-dark">' +
+    '<button class="icon-btn" data-action="go-mehr" aria-label="Zurück"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+    '<div class="header-center"><div class="header-title-sm">Belege</div><div class="header-sub">für die Techniker-Abrechnung</div></div></div>' +
+    '<div class="content lb"><button class="btn-primary" style="width:100%;margin-bottom:12px" data-action="beleg-neu">Beleg fotografieren</button>' + html +
+    '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
 }
 
 /* ── TECHNIK-MODUL ── */
@@ -3211,7 +3530,7 @@ function srvStatusHtml() {
    Weicht der Fingerabdruck beim Speichern ab, gilt der Eintrag als geändert und wird gesendet.
    Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
    haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
-var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege', 'tagespunkte'];
+var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege', 'tagespunkte', 'vorgaenge', 'belege'];
 var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc', 'grussName'];
 var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
 
@@ -4108,6 +4427,30 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-technik') { S.technikStandort = a.loc || S.lastStandort || S.technikStandort; nav('technik'); return; }
   if (a.action === 'go-vorschlaege') { nav('vorschlaege'); return; }
   if (a.action === 'go-tag') { nav('tag'); return; }
+  if (a.action === 'go-vorgaenge') { nav('vorgaenge'); return; }
+  if (a.action === 'vorgang-neu') { nav('vorgang-form'); return; }
+  if (a.action === 'vorgang-speichern') { vorgangSpeichern(); return; }
+  if (a.action === 'vorgang-erledigt') { vorgangAktion(a.vid, 'erledigt'); return; }
+  if (a.action === 'vorgang-nachfassen') { vorgangAktion(a.vid, 'nachfassen'); return; }
+  if (a.action === 'vorgang-frist') { vorgangAktion(a.vid, 'frist'); return; }
+  if (a.action === 'go-belege') { nav('belege'); return; }
+  if (a.action === 'beleg-neu') { belegNeu(); return; }
+  if (a.action === 'beleg-bearbeiten') { belegBearbeiten(a.bid); return; }
+  if (a.action === 'beleg-speichern') { belegSpeichern(); return; }
+  if (a.action === 'beleg-foto') { belegEntwurfMerken(); document.getElementById('beleg-input').click(); return; }
+  if (a.action === 'beleg-foto-weg') { belegEntwurfMerken(); S.belegEntwurf.fotos.splice(parseInt(a.idx, 10), 1); belegEntwurfMerken(); render(); return; }
+  if (a.action === 'beleg-abbrechen') {
+    if ((S.belegEntwurf || {}).fotos && S.belegEntwurf.fotos.length && !S.belegEntwurf.bearbeiten && !confirm('Beleg verwerfen?')) return;
+    S.belegEntwurf = null; try { localStorage.removeItem('bs2_beleg_entwurf'); } catch(e) {}
+    nav('belege'); return;
+  }
+  if (a.action === 'beleg-loeschen') {
+    if (!confirm('Beleg löschen? Bereits in der iCloud abgelegte Fotos bleiben dort.')) return;
+    var bid = S.belegEntwurf.id;
+    S.belege = S.belege.filter(function(x) { return x.id !== bid; });
+    S.belegEntwurf = null; try { localStorage.removeItem('bs2_beleg_entwurf'); } catch(e) {}
+    save(); nav('belege'); return;
+  }
   if (a.action === 'tag-haken') { tagespunktHaken(a.tid); return; }
   if (a.action === 'tag-nummer') { tagNummerKopieren(el, a.nr); return; }
   if (a.action === 'go-standort') { S.standortAnsicht = a.loc || S.lastStandort; S.lastStandort = S.standortAnsicht; nav('standort'); return; }
@@ -4886,6 +5229,12 @@ document.getElementById('photo-input').addEventListener('change', function(e) {
       reader.readAsDataURL(file);
     })(files[fi]);
   }
+});
+
+document.getElementById('beleg-input').addEventListener('change', function(e) {
+  var files = Array.from(e.target.files);
+  e.target.value = '';
+  if (files.length) belegFotos(files);
 });
 
 /* ── CSV IMPORT FILE HANDLER ── */
