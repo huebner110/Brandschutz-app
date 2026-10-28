@@ -2560,8 +2560,10 @@ function vMeinTag() {
   var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
   var sub = neuester.erstellt ? 'Fahrt-Zettel ' + (FENSTER_NAME[neuester.fenster] || '') + ', ' + fmtDate(neuester.datum) + ' ' + escH(neuester.zeit || '') : 'noch kein Fahrt-Zettel';
   var html = '';
+  // Abgehaktes verschwindet aus der Liste (Wunsch Thomas), bleibt aber gespeichert und lässt sich einblenden
+  var nErledigt = alle.filter(function(p) { return p.erledigt; }).length;
   TAG_ARTEN.forEach(function(g) {
-    var punkte = alle.filter(function(p) { return p.art === g.art; });
+    var punkte = alle.filter(function(p) { return p.art === g.art && (S.tagErledigtZeigen || !p.erledigt); });
     if (!punkte.length) return;
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
@@ -2580,7 +2582,8 @@ function vMeinTag() {
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') + '</span>' + rechts + '</li>';
       }).join('') + '</ul></div>';
   });
-  if (!html) html = '<div class="lb-panel"><div class="lb-leer">Noch nichts da. Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
+  if (nErledigt) html += '<button class="btn-outline" style="width:100%" data-action="tag-erledigt-zeigen">' + (S.tagErledigtZeigen ? 'Erledigte ausblenden' : 'Erledigte zeigen (' + nErledigt + ')') + '</button>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
     '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
@@ -4475,6 +4478,7 @@ document.addEventListener('click', function(e) {
     save(); nav('belege'); return;
   }
   if (a.action === 'tag-haken') { tagespunktHaken(a.tid); return; }
+  if (a.action === 'tag-erledigt-zeigen') { S.tagErledigtZeigen = !S.tagErledigtZeigen; render(); return; }
   if (a.action === 'tag-nummer') { tagNummerKopieren(el, a.nr); return; }
   if (a.action === 'go-standort') { S.standortAnsicht = a.loc || S.lastStandort; S.lastStandort = S.standortAnsicht; nav('standort'); return; }
   if (a.action === 'heute-alle') { S.heuteAlle = !S.heuteAlle; render(); return; }
