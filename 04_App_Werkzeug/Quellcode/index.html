@@ -230,6 +230,7 @@
     .lb-kpi { background: var(--card); border: 1px solid var(--border); border-left: 5px solid var(--k, var(--border)); border-radius: 0; padding: 10px; cursor: pointer; }
     .lb-kpi b { display: block; font-family: var(--zahl); font-size: 36px; font-weight: 700; line-height: 1; color: var(--k, var(--text)); font-variant-numeric: tabular-nums; }
     .lb-kpi span { font-size: 12px; font-weight: 600; }
+    .lb-kpi .lb-kpi-andere { display: block; font-size: 11px; color: var(--text-light); margin-top: 2px; }
     .lb-kpi.crit { --k: var(--crit); } .lb-kpi.warn { --k: var(--warn); } .lb-kpi.ok { --k: var(--ok); }
     .lb-panel { background: var(--card); border: 1px solid var(--border); border-top: 2px solid var(--primary); border-radius: 0; margin-bottom: 12px; }
     .lb-panel h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: var(--band); border-bottom: 1px solid var(--border); padding: 9px 12px; }
@@ -708,15 +709,41 @@ function letzteOffeneMaengelStandort(standort) {
         for (var mi = 0; mi < maengelList.length; mi++) {
           if (maengelList[mi].checkId === checkId) { m = maengelList[mi]; break; }
         }
-        if (m) state[checkId] = { mangel: m, datum: insp.datum };
+        if (m) state[checkId] = { mangel: m, datum: insp.datum, inspId: insp.id };
       }
     }
   }
   var offene = [];
   for (var cid in state) {
-    if (state[cid] && !state[cid].mangel.behoben) offene.push(state[cid]);
+    if (state[cid] && !state[cid].mangel.behoben && !weitergefuehrt(state[cid].mangel)) offene.push(state[cid]);
   }
   return offene;
+}
+
+/* Frist neuer Mängel nach Dringlichkeit (Plan „Mängel auf null“, 30.10.2026), im Formular änderbar */
+var AUTO_FRIST_TAGE = { kritisch: 7, mittel: 30, gering: 90 };
+function autoFrist(dring) {
+  var d = new Date(); d.setDate(d.getDate() + (AUTO_FRIST_TAGE[dring] || 30));
+  return d.toISOString().split('T')[0];
+}
+
+/* Mangel liegt bei anderen (Hausverwaltung, Vermieter, Fachfirma): zählt weiter, aber getrennt */
+function beiAnderen(m) { return !!(m && m.beiAnderen); }
+
+/* Übernommene Mängel: der alte Eintrag verweist auf die Begehung, in der er weitergeführt wird
+   (weiterIn). Er zählt dann nicht mehr, solange es diese Begehung gibt. */
+function weitergefuehrt(m) {
+  if (!m || !m.weiterIn) return false;
+  for (var i = 0; i < S.inspections.length; i++) { if (S.inspections[i].id === m.weiterIn) return true; }
+  return false;
+}
+function vorgaengerAbschliessen(insp) {
+  (insp.weiterVon || []).forEach(function(v) {
+    S.inspections.forEach(function(alt) {
+      if (alt.id !== v.inspId || alt.id === insp.id) return;
+      (alt.maengel || []).forEach(function(m) { if (m.id === v.mid && !m.weiterIn) m.weiterIn = insp.id; });
+    });
+  });
 }
 
 function mangelHintText(standort) {
@@ -810,6 +837,7 @@ function saveInsp() {
   }
   if (idx !== -1) S.inspections[idx] = S.currentInspection;
   else S.inspections.push(S.currentInspection);
+  vorgaengerAbschliessen(S.currentInspection);
   save();
 }
 
@@ -1078,7 +1106,8 @@ var LB_ICON = {
 
 /* Alle offenen Mängel. Steht derselbe Prüfpunkt in einer späteren Begehung am selben
    Standort wieder als Mangel (übernommen), zählt nur dieser neueste Eintrag, damit
-   nichts doppelt zählt. Erledigt ist ein Mangel nur über "behoben". */
+   nichts doppelt zählt. Erledigt ist ein Mangel über "behoben" oder weil er in einer
+   späteren Begehung weitergeführt wird (weiterIn, dort behoben oder auf OK/N.A. gesetzt). */
 function offeneMaengelAlle() {
   var letzte = {};
   S.inspections.forEach(function(insp, idx) {
@@ -1093,7 +1122,7 @@ function offeneMaengelAlle() {
   var items = [];
   S.inspections.forEach(function(insp, idx) {
     (insp.maengel || []).forEach(function(m) {
-      if (m.behoben) return;
+      if (m.behoben || weitergefuehrt(m)) return;
       var l = !insp.schnellmeldung && m.checkId ? letzte[insp.standort + '|' + m.checkId] : null;
       if (l && l.idx !== idx) return;
       items.push({ insp: insp, mangel: m });
@@ -1112,14 +1141,33 @@ function tageUeberfaellig(m) {
   return m.frist && m.frist < today() ? daysBetween(m.frist, today()) : 0;
 }
 
-function lagebildStandort(loc, alle) {
-  var r = { loc: loc, offen: 0, kritisch: 0, ueber: 0, letzte: lastInspForStandort(loc), begTage: null };
-  (alle || offeneMaengelAlle()).forEach(function(it) {
-    if (it.insp.standort !== loc) return;
-    r.offen++;
-    if (it.mangel.dringlichkeit === 'kritisch') r.kritisch++;
-    if (tageUeberfaellig(it.mangel) > 0) r.ueber++;
+// Zählt offen, kritisch, überfällig, jeweils mit "davon bei anderen" (…A)
+function mangelZahlen(liste) {
+  var z = { offen: 0, kritisch: 0, ueber: 0, offenA: 0, kritischA: 0, ueberA: 0 };
+  liste.forEach(function(it) {
+    var a = beiAnderen(it.mangel);
+    z.offen++; if (a) z.offenA++;
+    if (it.mangel.dringlichkeit === 'kritisch') { z.kritisch++; if (a) z.kritischA++; }
+    if (tageUeberfaellig(it.mangel) > 0) { z.ueber++; if (a) z.ueberA++; }
   });
+  return z;
+}
+
+function kennzahlenHtml(z, action) {
+  var kachel = function(zahl, anderen, text, ton) {
+    return '<div class="lb-kpi ' + ton + '"' + (action ? ' data-action="' + action + '"' : '') + '><b>' + zahl + '</b><span>' + text + '</span>' +
+      '<small class="lb-kpi-andere">' + (anderen ? 'davon ' + anderen + ' bei anderen' : '&nbsp;') + '</small></div>';
+  };
+  return '<div class="lb-kpis">' +
+    kachel(z.ueber, z.ueberA, 'überfällig', z.ueber - z.ueberA ? 'crit' : z.ueber ? 'warn' : 'ok') +
+    kachel(z.kritisch, z.kritischA, 'kritisch', z.kritisch ? 'warn' : 'ok') +
+    kachel(z.offen, z.offenA, 'offene Mängel', '') + '</div>';
+}
+
+function lagebildStandort(loc, alle) {
+  var r = { loc: loc, letzte: lastInspForStandort(loc), begTage: null };
+  var z = mangelZahlen((alle || offeneMaengelAlle()).filter(function(it) { return it.insp.standort === loc; }));
+  for (var k in z) r[k] = z[k];
   var interval = S.intervalle[loc] ? parseInt(S.intervalle[loc], 10) : 0;
   if (interval > 0) r.begTage = interval - (r.letzte ? daysBetween(r.letzte.datum, today()) : 9999);
   r.ton = (r.ueber > 0 || (r.begTage !== null && r.begTage < 0)) ? 'crit'
@@ -1128,18 +1176,12 @@ function lagebildStandort(loc, alle) {
 }
 
 function lagebildKopfHtml() {
-  var alle = offeneMaengelAlle();
-  var ueber = alle.filter(function(it) { return tageUeberfaellig(it.mangel) > 0; }).length;
-  var krit = alle.filter(function(it) { return it.mangel.dringlichkeit === 'kritisch'; }).length;
+  var z = mangelZahlen(offeneMaengelAlle());
   var syncLast = localStorage.getItem('bs2_sync_last');
   var stand = syncLast ? 'abgeglichen ' + ('0' + new Date(syncLast).getHours()).slice(-2) + ':' + ('0' + new Date(syncLast).getMinutes()).slice(-2) + ' Uhr' : 'nur dieses Gerät';
   var wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date().getDay()];
   return '<div class="lb-titel"><h1>Brandschutz Lagebild</h1><span>' + wt + ', ' + fmtDate(today()) + '<br>' + stand + '</span></div>' +
-    '<div class="lb-kpis">' +
-    '<div class="lb-kpi ' + (ueber ? 'crit' : 'ok') + '" data-action="go-maengel-global"><b>' + ueber + '</b><span>überfällig</span></div>' +
-    '<div class="lb-kpi ' + (krit ? 'warn' : 'ok') + '" data-action="go-maengel-global"><b>' + krit + '</b><span>kritisch</span></div>' +
-    '<div class="lb-kpi" data-action="go-maengel-global"><b>' + alle.length + '</b><span>offene Mängel</span></div>' +
-    '</div>';
+    kennzahlenHtml(z, 'go-maengel-global');
 }
 
 function lagebildKachelnHtml() {
@@ -1281,10 +1323,7 @@ function vStandort() {
     '<div class="header-center"><div class="header-title-sm">' + loc + '</div><div class="header-sub">' + begText + '</div></div>' +
     '</div>' +
     '<div class="content lb">' +
-    '<div class="lb-kpis">' +
-    '<div class="lb-kpi ' + (r.ueber ? 'crit' : 'ok') + '"><b>' + r.ueber + '</b><span>überfällig</span></div>' +
-    '<div class="lb-kpi ' + (r.kritisch ? 'warn' : 'ok') + '"><b>' + r.kritisch + '</b><span>kritisch</span></div>' +
-    '<div class="lb-kpi"><b>' + r.offen + '</b><span>offene Mängel</span></div></div>' +
+    kennzahlenHtml(r, '') +
     '<div class="lb-panel"><h2>Begehung oder Meldung</h2><div style="padding:12px">' + startFormularHtml(locationOpts) + '</div></div>' +
     '<div class="lb-panel"><h2>Offene Mängel <small>' + maengel.length + '</small></h2><div style="padding:10px 10px 2px">' + mHtml + '</div></div>' +
     '<div class="lb-panel"><h2>Anlagen und Prüffristen <small>' + anlagen.length + '</small></h2>' + aHtml + '</div>' +
@@ -1304,7 +1343,9 @@ function mangelKarteHtml(it, mitStandort) {
     (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 ? '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' : '') +
     (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
     (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
-    '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button></div></div>';
+    (beiAnderen(m) ? '<div class="mangel-card-frist" style="font-weight:700">Liegt bei anderen</div>' : '') +
+    '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
+    '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div></div>';
 }
 
 function mangelSortierung(a, b) {
@@ -1316,6 +1357,8 @@ function vMaengelGlobal() {
   var alle = offeneMaengelAlle();
   var filter = S.mgFilter || 'alle';
   var ort = S.mgStandort || '';
+  var bei = S.mgBei || 'alle';
+  if (bei !== 'alle') alle = alle.filter(function(it) { return beiAnderen(it.mangel) === (bei === 'andere'); });
   var items = alle.filter(function(it) {
     if (ort && it.insp.standort !== ort) return false;
     if (filter === 'ueber') return tageUeberfaellig(it.mangel) > 0;
@@ -1352,7 +1395,10 @@ function vMaengelGlobal() {
     '</div>' +
     '<div style="padding:10px 12px;background:var(--card);border-bottom:0.5px solid var(--border)">' +
     '<select class="form-select" id="mg-standort-sel" style="margin-bottom:8px">' + ortOpts + '</select>' +
-    '<div style="display:flex;gap:6px">' + filterHtml + '</div></div>' +
+    '<div style="display:flex;gap:6px">' + filterHtml + '</div>' +
+    '<div style="display:flex;gap:6px;margin-top:6px">' + [['alle', 'Alle'], ['mir', 'Bei mir'], ['andere', 'Bei anderen']].map(function(f) {
+      return '<button class="filter-btn' + (bei === f[0] ? ' filter-btn-active' : '') + '" data-action="mg-bei" data-filter="' + f[0] + '">' + f[1] + '</button>';
+    }).join('') + '</div></div>' +
     '<div class="content">' + html + '</div>';
 }
 
@@ -1512,6 +1558,9 @@ function vDefect() {
   // Neu angelegt (noch ohne Beschreibung) = noch nichts zu löschen, Abbrechen oben links genügt
   var istGespeichert = !!(m && m.beschreibung);
   if (!m) m = { id: S.currentDefectId, checkId: S.currentDefectCheckId, checkName: S.currentDefectCheckName, beschreibung: '', dringlichkeit: 'mittel', zustaendig: '', frist: '', fotos: [] };
+  // Neuer Mangel ohne Frist: Frist nach Dringlichkeit vorschlagen. Folgt der Dringlichkeit, bis sie von Hand geändert wird.
+  var fristAuto = !!m.fristAuto || (!istGespeichert && !m.uebernommen && !m.frist);
+  var fristWert = m.frist || (fristAuto ? autoFrist(m.dringlichkeit || 'mittel') : '');
 
   var fotosHtml = '';
   var fotos = m.fotos || [];
@@ -1547,8 +1596,14 @@ function vDefect() {
     '</div></div>' +
     '<div class="form-group"><label class="form-label">Zuständig (optional)</label>' +
     '<input type="text" class="form-input" id="d-zust" value="' + (m.zustaendig || '') + '" placeholder="Name oder Firma"></div>' +
+    '<div class="form-group"><label class="form-label">Wer ist dran?</label>' +
+    '<div class="seg-control">' +
+    '<button class="seg-btn' + (!m.beiAnderen ? ' seg-active-ok' : '') + '" data-action="set-bei" data-val="mir">Bei mir</button>' +
+    '<button class="seg-btn' + (m.beiAnderen ? ' seg-active-warn' : '') + '" data-action="set-bei" data-val="andere">Bei anderen</button>' +
+    '</div><div style="font-size:11px;color:var(--text-light);margin-top:4px">Bei anderen: Hausverwaltung, Vermieter oder Fachfirma. Zählt weiter, aber getrennt.</div></div>' +
     '<div class="form-group"><label class="form-label">Frist zur Behebung (optional)</label>' +
-    '<input type="date" class="form-input" id="d-frist" value="' + (m.frist || '') + '"></div>' +
+    '<input type="date" class="form-input" id="d-frist" value="' + fristWert + '"' + (fristAuto ? ' data-auto="1"' : '') + ' oninput="this.dataset.auto=\'\'">' +
+    (fristAuto ? '<div id="d-frist-hinweis" style="font-size:11px;color:var(--text-light);margin-top:4px">Automatisch nach Dringlichkeit (kritisch 7, mittel 30, gering 90 Tage), änderbar.</div>' : '') + '</div>' +
     '<div class="form-group">' +
     '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;border-top:0.5px solid var(--border)">' +
     '<input type="checkbox" id="d-bedenken"' + (m.bedenken ? ' checked' : '') + ' style="width:20px;height:20px;accent-color:var(--crit);flex-shrink:0;">' +
@@ -2518,7 +2573,7 @@ function vorschlagUebernehmen(vid) {
   insp.checks['direkt-' + mid] = { status: 'mangel' };
   insp.maengel.push({ id: mid, checkId: 'direkt-' + mid, checkName: 'Direktmeldung (ohne Begehung)', fotos: [],
     beschreibung: beschr + '\n[Aus Mail von ' + String(q.von || 'unbekannt').replace(/[<>]/g, '') + (q.datum ? ' vom ' + fmtDate(q.datum) : '') + ']',
-    zustaendig: wert('zust'), frist: wert('frist'), dringlichkeit: wert('dring') || 'mittel', behoben: false, bedenken: false });
+    zustaendig: wert('zust'), frist: wert('frist') || autoFrist(wert('dring') || 'mittel'), dringlichkeit: wert('dring') || 'mittel', behoben: false, bedenken: false });
   S.inspections.push(insp);
   v.status = 'uebernommen'; v.erledigt = today(); v.inspId = insp.id;
   v.standort = standort; v.beschreibung = beschr;
@@ -4447,6 +4502,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-mehr') { nav('mehr'); return; }
   if (a.action === 'settings-tab') { S.settingsTab = a.tab; render(); return; }
   if (a.action === 'mg-filter') { S.mgFilter = a.filter; render(); return; }
+  if (a.action === 'mg-bei') { S.mgBei = a.filter; render(); return; }
   if (a.action === 'go-maengel-global') { nav('maengel-global'); return; }
   if (a.action === 'go-qr') { nav('qr-codes'); return; }
   if (a.action === 'go-unterweisungen') { nav('unterweisungen'); return; }
@@ -4772,6 +4828,14 @@ document.addEventListener('click', function(e) {
     nav('standort'); return;
   }
 
+  if (a.action === 'mangel-bei') {
+    S.inspections.forEach(function(insp) {
+      if (insp.id !== a.inspid) return;
+      (insp.maengel || []).forEach(function(m) { if (m.id === a.mid) m.beiAnderen = !m.beiAnderen; });
+    });
+    save(); render(); return;
+  }
+
   if (a.action === 'mark-behoben') {
     for (var ii = 0; ii < S.inspections.length; ii++) {
       if (S.inspections[ii].id === a.inspid) {
@@ -4804,8 +4868,10 @@ document.addEventListener('click', function(e) {
         id: uid(), checkId: vm.checkId, checkName: vm.checkName,
         beschreibung: vm.beschreibung, dringlichkeit: vm.dringlichkeit,
         zustaendig: vm.zustaendig, frist: vm.frist, fotos: [], behoben: false,
-        uebernommen: true, uebernommenSeit: offeneVorher[ov].datum
+        uebernommen: true, uebernommenSeit: vm.uebernommenSeit || offeneVorher[ov].datum,
+        beiAnderen: !!vm.beiAnderen
       });
+      if (offeneVorher[ov].inspId) S.currentInspection.weiterVon = (S.currentInspection.weiterVon || []).concat([{ inspId: offeneVorher[ov].inspId, mid: vm.id }]);
     }
     S.collapsedCats = fertigeBereiche(S.currentInspection);
     save(); nav('inspection'); return;
@@ -4953,6 +5019,7 @@ document.addEventListener('click', function(e) {
       S.currentInspection.maengel.push(mSave);
     }
     mSave.beschreibung = beschr; mSave.zustaendig = zust; mSave.frist = frist;
+    delete mSave.fristAuto;
     var bedenkenCb = document.getElementById('d-bedenken');
     mSave.bedenken = bedenkenCb ? bedenkenCb.checked : false;
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
@@ -4975,6 +5042,8 @@ document.addEventListener('click', function(e) {
       S.currentInspection.maengel.push(mDring);
     }
     mDring.dringlichkeit = a.val;
+    var fristEl = document.getElementById('d-frist');
+    if (fristEl && fristEl.dataset.auto) fristEl.value = autoFrist(a.val);
     saveInsp();
     var btns = document.querySelectorAll('[data-action="set-dring"]');
     for (var b = 0; b < btns.length; b++) {
@@ -4982,6 +5051,22 @@ document.addEventListener('click', function(e) {
       var ac = bv === a.val ? (' seg-active-' + (bv === 'gering' ? 'ok' : bv === 'mittel' ? 'warn' : 'crit')) : '';
       btns[b].className = 'seg-btn' + ac;
     }
+    return;
+  }
+
+  if (a.action === 'set-bei') {
+    var mBei = null;
+    (S.currentInspection.maengel || []).forEach(function(x) { if (x.id === S.currentDefectId) mBei = x; });
+    if (!mBei) {
+      mBei = { id: S.currentDefectId, checkId: S.currentDefectCheckId, checkName: S.currentDefectCheckName, fotos: [], beschreibung: '', dringlichkeit: 'mittel', zustaendig: '', frist: '', behoben: false };
+      if (!S.currentInspection.maengel) S.currentInspection.maengel = [];
+      S.currentInspection.maengel.push(mBei);
+    }
+    mBei.beiAnderen = a.val === 'andere';
+    saveInsp();
+    document.querySelectorAll('[data-action="set-bei"]').forEach(function(bt) {
+      bt.className = 'seg-btn' + (bt.dataset.val === a.val ? (a.val === 'andere' ? ' seg-active-warn' : ' seg-active-ok') : '');
+    });
     return;
   }
 
@@ -5015,7 +5100,7 @@ document.addEventListener('click', function(e) {
     var apBedenken = document.getElementById('d-bedenken');
     if (apBeschr) mAp.beschreibung = apBeschr.value;
     if (apZust) mAp.zustaendig = apZust.value;
-    if (apFrist) mAp.frist = apFrist.value;
+    if (apFrist) { mAp.frist = apFrist.value; if (apFrist.dataset.auto) mAp.fristAuto = true; else delete mAp.fristAuto; }
     if (apBedenken) mAp.bedenken = apBedenken.checked;
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
     S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
@@ -5576,7 +5661,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-10-28d';
+var APP_STAND = '2026-11-02a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
