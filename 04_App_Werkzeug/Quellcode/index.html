@@ -767,7 +767,10 @@ function inspCounts(insp) {
     ok: vals.filter(function(v) { return v.status === 'ok'; }).length,
     mangel: (insp.maengel || []).length,
     na: vals.filter(function(v) { return v.status === 'na'; }).length,
-    kritisch: (insp.maengel || []).filter(function(m) { return m.dringlichkeit === 'kritisch'; }).length,
+    // kritisch = nur offene; kritischBehoben und kritischAlle für Hinweis und PDF (Protokoll von damals)
+    kritisch: (insp.maengel || []).filter(function(m) { return m.dringlichkeit === 'kritisch' && !m.behoben; }).length,
+    kritischBehoben: (insp.maengel || []).filter(function(m) { return m.dringlichkeit === 'kritisch' && m.behoben; }).length,
+    kritischAlle: (insp.maengel || []).filter(function(m) { return m.dringlichkeit === 'kritisch'; }).length,
     offen: (insp.maengel || []).filter(function(m) { return !m.behoben; }).length
   };
 }
@@ -1773,7 +1776,8 @@ function vSummary() {
     '<div class="stats-row">' +
     '<div class="stat-card"><div class="stat-num stat-ok">' + c.ok + '</div><div class="stat-label">In Ordnung</div></div>' +
     '<div class="stat-card"><div class="stat-num stat-warn">' + c.offen + '</div><div class="stat-label">Offen</div></div>' +
-    '<div class="stat-card"><div class="stat-num stat-crit">' + c.kritisch + '</div><div class="stat-label">Kritisch</div></div>' +
+    '<div class="stat-card"><div class="stat-num ' + (c.kritisch ? 'stat-crit' : 'stat-ok') + '">' + c.kritisch + '</div><div class="stat-label">Kritisch</div>' +
+    (c.kritischBehoben ? '<div class="stat-label" style="font-size:10px;margin-top:2px">' + c.kritischBehoben + ' behoben</div>' : '') + '</div>' +
     '<div class="stat-card"><div class="stat-num stat-na">' + c.na + '</div><div class="stat-label">N.A.</div></div></div>' +
     '<div class="card" style="margin-bottom:12px">' +
     '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Standort</label>' +
@@ -5515,7 +5519,7 @@ function doExport() {
   var statsSection = '<h2>Zusammenfassung</h2><div class="stats">' +
     '<div class="stat"><div class="stat-n n-ok">' + c.ok + '</div><div class="stat-l">In Ordnung</div></div>' +
     '<div class="stat"><div class="stat-n n-w">' + c.mangel + '</div><div class="stat-l">Mängel</div></div>' +
-    '<div class="stat"><div class="stat-n n-c">' + c.kritisch + '</div><div class="stat-l">Kritisch</div></div>' +
+    '<div class="stat"><div class="stat-n n-c">' + c.kritischAlle + '</div><div class="stat-l">Kritisch</div></div>' +
     '<div class="stat"><div class="stat-n n-na">' + c.na + '</div><div class="stat-l">Nicht anwendbar</div></div>' +
     '</div>';
 
@@ -5661,7 +5665,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-02a';
+var APP_STAND = '2026-11-02b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
