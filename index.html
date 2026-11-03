@@ -2549,6 +2549,7 @@ function vVorschlaege() {
     html += '<div class="card" style="margin-bottom:12px">' +
       '<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;line-height:1.5">Mail von <strong>' + escH(q.von || 'unbekannt') + '</strong>' +
       (q.datum ? ' vom ' + fmtDate(q.datum) : '') + (q.betreff ? '<br>Betreff: ' + escH(q.betreff) : '') + '</div>' +
+      ((v.fotos || []).length ? '<div class="photo-preview-row" style="margin-bottom:12px">' + v.fotos.map(function(f) { return '<img class="photo-preview-thumb" src="' + fotoSrc(f) + '" alt="Foto">'; }).join('') + '</div>' : '') +
       (v.auszug ? '<div style="font-size:13px;background:var(--bg);border-left:3px solid var(--border);padding:8px 10px;margin-bottom:12px;white-space:pre-wrap">' + escH(v.auszug) + '</div>' : '') +
       '<div class="form-group"><label class="form-label">Standort</label>' +
       '<select class="form-select" id="vs-standort-' + v.id + '">' + standortOpts + '</select></div>' +
@@ -2598,12 +2599,12 @@ function vorschlagUebernehmen(vid) {
   var mid = uid();
   var insp = { id: uid(), standort: standort, datum: today(), begeher: S.defaultBegeher, anwesende: '', checks: {}, maengel: [], schnellmeldung: true };
   insp.checks['direkt-' + mid] = { status: 'mangel' };
-  insp.maengel.push({ id: mid, checkId: 'direkt-' + mid, checkName: 'Direktmeldung (ohne Begehung)', fotos: [],
+  insp.maengel.push({ id: mid, checkId: 'direkt-' + mid, checkName: 'Direktmeldung (ohne Begehung)', fotos: (v.fotos || []).slice(),
     beschreibung: beschr + '\n[Aus Mail von ' + String(q.von || 'unbekannt').replace(/[<>]/g, '') + (q.datum ? ' vom ' + fmtDate(q.datum) : '') + ']',
     zustaendig: wert('zust'), frist: wert('frist') || autoFrist(wert('dring') || 'mittel'), dringlichkeit: wert('dring') || 'mittel', behoben: false, bedenken: false });
   S.inspections.push(insp);
   v.status = 'uebernommen'; v.erledigt = today(); v.inspId = insp.id;
-  v.standort = standort; v.beschreibung = beschr;
+  v.standort = standort; v.beschreibung = beschr; v.fotos = []; // Fotos sind jetzt an der Meldung
   save();
   alert('Als Direktmeldung für ' + standort + ' angelegt.');
   render();
@@ -5848,7 +5849,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03g';
+var APP_STAND = '2026-11-03h';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
