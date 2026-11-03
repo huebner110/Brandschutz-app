@@ -1690,6 +1690,8 @@ function vSchnellmangelErgebnis() {
     '<button class="btn-primary" data-action="teilen-schnellmangel" id="btn-teilen-sm">' + (m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)') + '</button>' +
     recipientHint +
     '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen. Der Betreff liegt dann in der Zwischenablage: in der Mail auf „Betreff“ tippen und „Einsetzen“ wählen.</div>' +
+    (S.srvUrl && S.srvKey ? '<button class="btn-outline" data-action="entwurf-schnellmangel" id="btn-entwurf-sm">Als Entwurf ins Postfach (mit Betreff und PDF)</button>' +
+    '<div style="font-size:11px;color:var(--text-light)">Legt die fertige Mail mit Empfänger, Betreff, Text, Signatur und PDF als Entwurf im Brandschutz-Gmail ab (nach etwa einer Minute unter Entwürfe). Gesendet wird erst, wenn du in der Mail-App auf Senden tippst.</div>' : '') +
     '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>' +
     '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Mail ohne Anhang</button></a>' +
     '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
@@ -5333,6 +5335,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'edit-schnellmangel') { nav('defect'); return; }
   if (a.action === 'export-schnellmangel') { doExportSchnellmangel(); return; }
   if (a.action === 'teilen-schnellmangel') { doTeilenSchnellmangel(); return; }
+  if (a.action === 'entwurf-schnellmangel') { doEntwurfSchnellmangel(); return; }
   if (a.action === 'copy-cl-mail') {
     var clm = a.mail || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -5857,7 +5860,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03i';
+var APP_STAND = '2026-11-03j';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -6044,6 +6047,41 @@ function doTeilenSchnellmangel() {
   }).catch(function(e) {
     if (btn) { btn.disabled = false; btn.textContent = btnText; }
     alert('PDF konnte nicht erstellt werden' + (navigator.onLine === false ? ' (keine Internetverbindung, wird beim ersten Mal gebraucht)' : '') + '. Bitte „Drucken / als PDF sichern“ nutzen.\n\n' + (e && e.message ? e.message : e));
+  });
+}
+
+// Mail mit PDF als Entwurf im Brandschutz-Gmail ablegen (Server erledigt das, Betreff und Empfänger sind damit gesetzt)
+function doEntwurfSchnellmangel() {
+  var d = schnellmangelDokument();
+  if (!d) return;
+  var mt = schnellmangelMailText(d.insp, d.m, true);
+  var btn = document.getElementById('btn-entwurf-sm');
+  var alt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'PDF wird erstellt …'; }
+  var fertig = function() { if (btn) { btn.disabled = false; btn.textContent = alt; } };
+  erzeugeSchnellmangelPdf(d).then(function(blob) {
+    return new Promise(function(ok, fehler) {
+      var r = new FileReader();
+      r.onload = function() { ok(String(r.result).split(',')[1]); };
+      r.onerror = function() { fehler(new Error('PDF nicht lesbar')); };
+      r.readAsDataURL(blob);
+    });
+  }).then(function(b64) {
+    if (btn) btn.textContent = 'Wird abgelegt …';
+    return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ an: centerleiterEmailFor(d.insp.standort) || '', betreff: mt.subject, text: mt.body, dateiname: d.dateiname, pdf: b64 })
+    });
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(res) {
+      if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
+      fertig();
+      alert('Der Entwurf liegt in etwa einer Minute im Brandschutz-Gmail unter Entwürfe. Dort öffnen und senden.');
+    });
+  }).catch(function(e) {
+    fertig();
+    alert('Entwurf nicht abgelegt: ' + (e && e.message ? e.message : e));
   });
 }
 
