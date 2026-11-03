@@ -1161,6 +1161,19 @@ function offeneMaengelAlle() {
 // Herkunftsvermerk aus dem Mail-Eingang gehört nur in die App, nicht in Mails und PDFs
 function ohneHerkunft(t) { return String(t || '').replace(/\n?\[Aus Mail von [^\]]*\]\s*$/, '').trim(); }
 // Kurzbezeichnung eines Mangels: Prüfpunkt, bei Direktmeldungen die erste Zeile der Beschreibung
+// Stand der Mail zu einem Mangel: Entwurf abgelegt, Mail raus (aus dem Mail-Vorgang), Antwort da
+function mailStandHtml(m) {
+  if (!m || !m.mailBetreff) return '';
+  var v = null;
+  (S.vorgaenge || []).forEach(function(x) { if (x && x.betreff === m.mailBetreff) v = x; });
+  var text, ton = 'warn';
+  if (!v) text = 'Mail als Entwurf abgelegt am ' + fmtDate(String(m.mailEntwurfAm || '').slice(0, 10)) + ', noch nicht gesendet';
+  else if (v.art === 'antwort') { text = 'Mail raus, Antwort da'; ton = 'ok'; }
+  else if (v.art === 'erinnert') text = 'Mail raus, Erinnerung entworfen';
+  else if (v.art === 'offen') text = 'Mail raus am ' + fmtDate(v.gesendet) + ', wartet auf Antwort' + (v.frist ? ' (bis ' + fmtDate(v.frist) + ')' : '');
+  else { text = 'Mail raus, Vorgang erledigt'; ton = 'ok'; }
+  return '<div class="mangel-card-frist" style="font-weight:700;color:var(--' + (ton === 'ok' ? 'ok, #1e8449' : 'warn, #b9770e') + ')">&#9993; ' + escH(text) + '</div>';
+}
 function mangelKurz(m) {
   if (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0) return m.checkName;
   return (m.beschreibung || m.checkName || '').split('\n')[0];
@@ -1373,6 +1386,7 @@ function mangelKarteHtml(it, mitStandort) {
     (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
     (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
     (beiAnderen(m) ? '<div class="mangel-card-frist" style="font-weight:700">Liegt bei anderen</div>' : '') +
+    mailStandHtml(m) +
     '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
     '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div></div>';
 }
@@ -1685,15 +1699,19 @@ function vSchnellmangelErgebnis() {
     '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
     (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
     (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
+    mailStandHtml(m) +
     fotosPreview + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-bottom:calc(20px + var(--safe-bottom))">' +
-    '<button class="btn-primary" data-action="teilen-schnellmangel" id="btn-teilen-sm">' + (m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)') + '</button>' +
     recipientHint +
-    '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen. Der Betreff liegt dann in der Zwischenablage: in der Mail auf „Betreff“ tippen und „Einsetzen“ wählen.</div>' +
-    (S.srvUrl && S.srvKey ? '<button class="btn-outline" data-action="entwurf-schnellmangel" id="btn-entwurf-sm">Als Entwurf ins Postfach (mit Betreff und PDF)</button>' +
-    '<div style="font-size:11px;color:var(--text-light)">Legt die fertige Mail mit Empfänger, Betreff, Text, Signatur und PDF als Entwurf im Brandschutz-Gmail ab (nach etwa einer Minute unter Entwürfe). Gesendet wird erst, wenn du in der Mail-App auf Senden tippst.</div>' : '') +
-    '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>' +
-    '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Mail ohne Anhang</button></a>' +
+    (S.srvUrl && S.srvKey
+      ? '<button class="btn-primary" data-action="entwurf-schnellmangel" id="btn-entwurf-sm">Mail als Entwurf ins Postfach (mit PDF)</button>' +
+        '<div style="font-size:11px;color:var(--text-light)">Legt die fertige Mail mit Empfänger, Betreff, Text, Signatur und PDF als Entwurf im Brandschutz-Gmail ab (nach etwa einer Minute unter Entwürfe). Gesendet wird erst, wenn du in der Mail-App auf Senden tippst. Danach beobachtet der App-Server die Antwort.</div>' +
+        '<button class="btn-outline" data-action="teilen-schnellmangel" id="btn-teilen-sm">PDF teilen (z. B. WhatsApp, AirDrop)</button>' +
+        '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>'
+      : '<button class="btn-primary" data-action="teilen-schnellmangel" id="btn-teilen-sm">' + (m.bedenken ? 'Bedenkenanzeige per Mail senden (PDF)' : 'Per Mail senden (mit PDF)') + '</button>' +
+        '<div style="font-size:11px;color:var(--text-light)">Das PDF wird erstellt und im Teilen-Menü angehängt. Dort „Mail“ wählen und den Empfänger eintragen. Der Betreff liegt dann in der Zwischenablage: in der Mail auf „Betreff“ tippen und „Einsetzen“ wählen.</div>' +
+        '<button class="btn-outline" data-action="export-schnellmangel">' + (m.bedenken ? 'Bedenkenanzeige drucken / als PDF sichern' : 'Drucken / als PDF sichern') + '</button>' +
+        '<a href="' + mailtoHref + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">Mail ohne Anhang</button></a>') +
     '<button class="btn-outline" data-action="edit-schnellmangel">Angaben bearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Fertig</button>' +
     '<button class="btn-danger" data-action="del-insp" data-id="' + insp.id + '" style="margin-top:14px">Meldung löschen</button>' +
@@ -5860,7 +5878,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03j';
+var APP_STAND = '2026-11-03k';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5892,10 +5910,14 @@ function schnellmangelMailText(insp, m, mitAnhang) {
   var zustaendig = (m.zustaendig || '').trim();
   // "Zuständig" weglassen, wenn es ohnehin der Empfänger ist
   var zustEmpfaenger = zustaendig && vorname && zustaendig.split(' ')[0].toLowerCase() === vorname.toLowerCase();
+  var kurz = ohneHerkunft(mangelKurz(m)).replace(/[\r\n|<>]+/g, ' ').split(/\.\s/)[0].replace(/\.$/, '').trim();
+  if (kurz.length > 50) kurz = kurz.slice(0, 50).replace(/\s+\S*$/, '') + ' …';
+  var betreffKurz = kurz ? ' – ' + kurz : '';
   var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   if (m.bedenken) {
     return {
-      subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum),
+      anrede: vorname ? 'Hallo ' + vorname : 'Hallo zusammen',
+      subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum) + betreffKurz,
       body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
         'bei der Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' habe ich einen Mangel festgestellt, gegen den ich sicherheitstechnische Bedenken habe:\n\n' +
         (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + dringCap +
@@ -5906,7 +5928,8 @@ function schnellmangelMailText(insp, m, mitAnhang) {
     };
   }
   return {
-    subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum),
+    anrede: vorname ? 'Hallo ' + vorname : 'Hallo zusammen',
+    subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum) + betreffKurz,
     body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
       'bei meiner Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' ist mir folgender Mangel aufgefallen:\n\n' +
       (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
@@ -6071,12 +6094,16 @@ function doEntwurfSchnellmangel() {
     return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ an: centerleiterEmailFor(d.insp.standort) || '', betreff: mt.subject, text: mt.body, dateiname: d.dateiname, pdf: b64 })
+      body: JSON.stringify({ an: centerleiterEmailFor(d.insp.standort) || '', betreff: mt.subject, text: mt.body, dateiname: d.dateiname, pdf: b64,
+        frist: d.m.frist || '', anrede: mt.anrede || '', form: 'du' })
     });
   }).then(function(r) {
     return r.json().catch(function() { return {}; }).then(function(res) {
       if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
+      d.m.mailBetreff = mt.subject; d.m.mailEntwurfAm = new Date().toISOString();
+      save();
       fertig();
+      render();
       alert('Der Entwurf liegt in etwa einer Minute im Brandschutz-Gmail unter Entwürfe. Dort öffnen und senden.');
     });
   }).catch(function(e) {
