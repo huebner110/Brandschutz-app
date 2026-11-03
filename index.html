@@ -268,6 +268,9 @@
       .tag-raster > .tag-kal { order: 2; position: sticky; top: 12px; }
     }
     /* Auftrag an Claude direkt aus einem Punkt (03.11.2026) */
+    .tag-liste .t.tag-info-an { cursor: pointer; }
+    .tag-info-pfeil { color: var(--primary); display: inline !important; }
+    .tag-liste .t .tag-info { display: block; margin-top: 6px; padding: 8px 10px; background: var(--band); border-left: 3px solid var(--primary); font-size: 13.5px; line-height: 1.45; color: var(--text); white-space: normal; }
     .tag-auftrag-knopf.an { background: var(--primary); border-color: var(--primary); color: #fff; }
     .tag-auftrag-knopf { border: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 5px 10px; white-space: nowrap; }
     .tag-liste li.tag-auftrag-form { display: block; background: var(--band); cursor: default; }
@@ -2628,6 +2631,8 @@ var TAG_ARTEN = [
 // Begehung heute nicht geschafft: Knopf „Verschieben“ mit neuem Tag (nur Mo bis Do). Geht als Auftrag an den
 // Server, der den Kalendertermin verschiebt und den Punkt abhakt (seit 03.11.2026). Zum Abschalten false.
 var TAG_VERSCHIEBEN = true;
+// Kurzinfo zum Aufklappen (Feld info: „Stand: … / Du: …“). Zum Abschalten false.
+var TAG_INFO = true;
 // Termine von heute in Mein Tag (Art kalender, vom Fahrt-Zettel). Zum Abschalten auf false setzen.
 var TAG_KALENDER = true;
 // Auftrag an Claude aus einem Punkt: Feld auftrag geht über den Abgleich an den Server (tag-auftraege.py),
@@ -2673,9 +2678,12 @@ function vMeinTag() {
         var haken = g.ohneHaken ? '<span class="lb-icon">' + LB_ICON.begehung + '</span>'
           : '<button class="tag-haken' + (p.erledigt ? ' an' : '') + '" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="' + (p.erledigt ? 'Haken entfernen' : 'Abhaken') + '">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
+        // Kurzinfo „Stand / Du“ vom Fahrt-Zettel: klappt beim Antippen des Punkts auf (seit 03.11.2026)
+        var info = TAG_INFO && p.info ? String(p.info) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
-          '<span class="t"><b>' + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
-          (p.text ? '<span>' + escH(p.text) + '</span>' : '') + auftragZeile +
+          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
+          (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + '</span>' : '') + auftragZeile +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
           (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
@@ -4705,6 +4713,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'tag-mikro') { tagMikro(); return; }
   if (a.action === 'tag-auftrag-abbrechen') { if (tagErkennung) tagErkennung.stop(); S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-auftrag-senden') { var ta = document.getElementById('tag-auftrag-text'); if (ta) S.tagAuftragText = ta.value; tagAuftragSenden(a.tid); return; }
+  if (a.action === 'tag-info') { S.tagInfoOffen = S.tagInfoOffen === a.tid ? null : a.tid; render(); return; }
   if (a.action === 'tag-verschieben') { S.tagVerschiebenOffen = S.tagVerschiebenOffen === a.tid ? null : a.tid; S.tagVerschiebenAuf = ''; S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-verschieben-tag') { var tt = document.getElementById('tag-auftrag-text'); if (tt) S.tagAuftragText = tt.value; S.tagVerschiebenAuf = a.tag; render(); return; }
   if (a.action === 'tag-verschieben-abbrechen') { S.tagVerschiebenOffen = null; S.tagVerschiebenAuf = ''; S.tagAuftragText = ''; render(); return; }
@@ -5837,7 +5846,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03d';
+var APP_STAND = '2026-11-03e';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
