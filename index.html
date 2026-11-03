@@ -5878,7 +5878,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03k';
+var APP_STAND = '2026-11-03l';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5924,7 +5924,8 @@ function schnellmangelMailText(insp, m, mitAnhang) {
         (zustaendig ? '\nZuständig: ' + zustaendig : '') +
         (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
         (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
-        (vorname ? ' Bitte bestätige mir kurz den Erhalt und teile mir mit, bis wann der Mangel beseitigt wird.' : ' Bitte bestätigt mir kurz den Erhalt und teilt mir mit, bis wann der Mangel beseitigt wird.') + gruss
+        (vorname ? ' Bitte bestätige mir kurz den Erhalt und teile mir mit, bis wann der Mangel beseitigt wird.' : ' Bitte bestätigt mir kurz den Erhalt und teilt mir mit, bis wann der Mangel beseitigt wird.') +
+        (vorname ? '\n\nWenn du Fragen hast, melde dich einfach.' : '\n\nWenn ihr Fragen habt, meldet euch einfach.') + gruss
     };
   }
   return {
@@ -5937,7 +5938,8 @@ function schnellmangelMailText(insp, m, mitAnhang) {
       (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
       (vorname ? 'Kümmerst du dich bitte' : 'Kümmert ihr euch bitte') + (m.frist ? ' bis zum ' + fmtDate(m.frist) : '') + ' darum und ' +
       (vorname ? 'gibst' : 'gebt') + ' mir kurz Bescheid, wenn es erledigt ist?' +
-      (mitAnhang ? ' Die Meldung' + ((m.fotos || []).length ? ' mit Foto' : '') + ' hängt als PDF an.' : '') + gruss
+      (mitAnhang ? ' Die Meldung' + ((m.fotos || []).length ? ' mit Foto' : '') + ' hängt als PDF an.' : '') +
+      (vorname ? '\n\nWenn du Fragen hast, melde dich einfach.' : '\n\nWenn ihr Fragen habt, meldet euch einfach.') + gruss
   };
 }
 
