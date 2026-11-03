@@ -410,6 +410,7 @@ var S = {
   adminPin: '',
   gfName: '',
   grussName: '',
+  signatur: '',
   gfEmail: '',
   gfCc: '',
   lastStandort: 'Sendling',
@@ -606,6 +607,7 @@ function save() {
     localStorage.setItem('bs2_pin', S.adminPin);
     localStorage.setItem('bs2_gf_name', S.gfName);
     localStorage.setItem('bs2_gruss_name', S.grussName);
+    localStorage.setItem('bs2_signatur', S.signatur);
     localStorage.setItem('bs2_gf_email', S.gfEmail);
     localStorage.setItem('bs2_gf_cc', S.gfCc);
     localStorage.setItem('bs2_intervalle', JSON.stringify(S.intervalle));
@@ -649,6 +651,7 @@ function load() {
     S.adminPin = localStorage.getItem('bs2_pin') || '';
     S.gfName = localStorage.getItem('bs2_gf_name') || '';
     S.grussName = localStorage.getItem('bs2_gruss_name') || '';
+    S.signatur = localStorage.getItem('bs2_signatur') || '';
     S.gfEmail = localStorage.getItem('bs2_gf_email') || '';
     S.gfCc = localStorage.getItem('bs2_gf_cc') || '';
     var iv = localStorage.getItem('bs2_intervalle');
@@ -1764,7 +1767,7 @@ function vSummary() {
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
   var gfVorname = (S.gfName || '').trim().split(' ')[0];
-  var bodyGF = encodeURIComponent('Hallo' + (gfVorname ? ' ' + gfVorname : '') + ',\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Die Mängel habe ich bereits an die Centerleitung geschickt, damit die Behebung in die Wege geleitet wird.\n\nDas vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße');
+  var bodyGF = encodeURIComponent('Hallo' + (gfVorname ? ' ' + gfVorname : '') + ',\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Die Mängel habe ich bereits an die Centerleitung geschickt, damit die Behebung in die Wege geleitet wird.\n\nDas vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße' + (S.signatur ? '\n\n' + S.signatur : ''));
   var gfCcListe = (S.gfCc || '').replace(/[;\s]+/g, ',').replace(/^,+|,+$/g, '');
   var mailtoHrefGF = 'mailto:' + (S.gfEmail || '') + '?' + (gfCcListe ? 'cc=' + encodeURIComponent(gfCcListe) + '&' : '') + 'subject=' + subjectGF + '&body=' + bodyGF;
   var gfRecipientHint = S.gfEmail
@@ -1779,7 +1782,7 @@ function vSummary() {
   var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
   var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
   var subjectCL = encodeURIComponent('Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik');
-  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum.split(' ')[0] : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße');
+  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum.split(' ')[0] : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße' + (S.signatur ? '\n\n' + S.signatur : ''));
   var mailtoHrefCL = 'mailto:' + centerleiterMailSum + '?subject=' + subjectCL + '&body=' + bodyCL;
   var clRecipientHint = centerleiterMailSum
     ? 'Empfänger: ' + centerleiterMailSum + ' (Centerleiter ' + insp.standort + ')'
@@ -1959,6 +1962,8 @@ function vSettings() {
     '<input type="email" class="form-input" id="s-email" value="' + S.defaultEmail + '" placeholder="name@example.de"></div>' +
     '<div class="form-group"><label class="form-label">Name unter dem Gruß (Mails an Kollegen)</label>' +
     '<input type="text" class="form-input" id="s-gruss-name" value="' + escH(S.grussName) + '" placeholder="z. B. Spitzname"></div>' +
+    '<div class="form-group"><label class="form-label">Signatur (unter dem Gruß in Mails)</label>' +
+    '<textarea class="form-textarea" id="s-signatur" rows="6" placeholder="Name, Funktion, Telefon …">' + escH(S.signatur) + '</textarea></div>' +
     '<div class="form-group"><label class="form-label">Geschäftsleitung: Name (für die Anrede)</label>' +
     '<input type="text" class="form-input" id="s-gf-name" value="' + S.gfName + '" placeholder="Vorname Nachname"></div>' +
     '<div class="form-group"><label class="form-label">Geschäftsleitung: E-Mail</label>' +
@@ -3594,6 +3599,7 @@ function buildBackupData() {
     firmierung: S.firmierung,
     gfName: S.gfName,
     grussName: S.grussName,
+    signatur: S.signatur,
     gfEmail: S.gfEmail,
     gfCc: S.gfCc
   };
@@ -3656,6 +3662,7 @@ function importBackup(text) {
     if (data.firmierung)    S.firmierung    = data.firmierung;
     if (data.gfName)        S.gfName        = data.gfName;
     if (data.grussName)     S.grussName     = data.grussName;
+    if (data.signatur)      S.signatur      = data.signatur;
     if (data.gfEmail)       S.gfEmail       = data.gfEmail;
     if (data.gfCc)          S.gfCc          = data.gfCc;
     save();
@@ -3782,7 +3789,7 @@ function srvStatusHtml() {
    Bei Konflikten gewinnt die spätere Änderung. Vor dem ersten Abgleich vorhandene Einträge
    haben die Zeit 0, dann bleibt der Stand, der zuerst auf dem Server war. */
 var SYNC_LISTEN = ['inspections', 'anlagen', 'vertraege', 'kontakte', 'aufgaben', 'unterweisungen', 'vorschlaege', 'tagespunkte', 'vorgaenge', 'belege'];
-var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc', 'grussName'];
+var SYNC_EINSTELLUNGEN = ['categories', 'intervalle', 'defaultBegeher', 'defaultEmail', 'firmierung', 'gfName', 'gfEmail', 'gfCc', 'grussName', 'signatur'];
 var syncTimer = null, syncBusy = false, syncAgain = false, syncMeta = null;
 
 function syncEintraege() {
@@ -5353,6 +5360,7 @@ document.addEventListener('click', function(e) {
     S.adminPin = pv !== undefined ? pv : S.adminPin;
     S.gfName = ((document.getElementById('s-gf-name') || {}).value || '').trim();
     S.grussName = ((document.getElementById('s-gruss-name') || {}).value || '').trim();
+    S.signatur = ((document.getElementById('s-signatur') || {}).value || '').trim();
     S.gfEmail = ((document.getElementById('s-gf-email') || {}).value || '').trim();
     S.gfCc = ((document.getElementById('s-gf-cc') || {}).value || '').trim();
     save(); nav('home'); return;
@@ -5849,7 +5857,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03h';
+var APP_STAND = '2026-11-03i';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5881,7 +5889,7 @@ function schnellmangelMailText(insp, m, mitAnhang) {
   var zustaendig = (m.zustaendig || '').trim();
   // "Zuständig" weglassen, wenn es ohnehin der Empfänger ist
   var zustEmpfaenger = zustaendig && vorname && zustaendig.split(' ')[0].toLowerCase() === vorname.toLowerCase();
-  var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '');
+  var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   if (m.bedenken) {
     return {
       subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum),
