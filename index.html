@@ -1155,6 +1155,8 @@ function offeneMaengelAlle() {
   return items;
 }
 
+// Herkunftsvermerk aus dem Mail-Eingang gehört nur in die App, nicht in Mails und PDFs
+function ohneHerkunft(t) { return String(t || '').replace(/\n?\[Aus Mail von [^\]]*\]\s*$/, '').trim(); }
 // Kurzbezeichnung eines Mangels: Prüfpunkt, bei Direktmeldungen die erste Zeile der Beschreibung
 function mangelKurz(m) {
   if (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0) return m.checkName;
@@ -1757,7 +1759,7 @@ function vSummary() {
   var clListeText = '';
   for (var mci = 0; mci < maengelOffen.length; mci++) {
     var mc = maengelOffen[mci];
-    clListeText += '- ' + mc.checkName + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + (mc.beschreibung || '') + '\n\n';
+    clListeText += '- ' + mc.checkName + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + (ohneHerkunft(mc.beschreibung) || '') + '\n\n';
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
@@ -5586,7 +5588,7 @@ function doCSV() {
         rows.push([
           insp.standort, fmtDate(insp.datum), insp.begeher, insp.anwesende || '',
           item.name, cat.name, status,
-          m ? (m.beschreibung || '') : '',
+          m ? (ohneHerkunft(m.beschreibung) || '') : '',
           m ? (m.dringlichkeit || '') : '',
           m ? (m.zustaendig || '') : '',
           m ? (m.frist ? fmtDate(m.frist) : '') : '',
@@ -5636,7 +5638,7 @@ function doExport() {
       } else {
         var st = ch.status === 'ok' ? 'In Ordnung' : ch.status === 'mangel' ? 'Mangel' : 'N.A.';
         var sc = ch.status === 'ok' ? 's-ok' : ch.status === 'mangel' ? 's-mn' : 's-na';
-        var bemerkung = ch.notiz || (m ? (m.beschreibung || '') : '');
+        var bemerkung = ch.notiz || (m ? (ohneHerkunft(m.beschreibung) || '') : '');
         var checkFotosHtml = '';
         if (ch.fotos && ch.fotos.length) {
           checkFotosHtml = '<div class="photos">';
@@ -5682,7 +5684,7 @@ function doExport() {
         '<div style="display:flex;gap:4px"><span class="db ' + dc + '">' + dringCap + '</span>' + behobHtml + '</div></div>' +
         '<div class="mb-b">' +
         (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + (mgStockwerk ? ' &middot; Stockwerk: ' + mgStockwerk : '') + '</div>' : (mgStockwerk ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Stockwerk: ' + mgStockwerk + '</div>' : '')) +
-        '<div>' + (mg.beschreibung || '') + '</div>' +
+        '<div>' + (ohneHerkunft(mg.beschreibung) || '') + '</div>' +
         (mg.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + mg.zustaendig + '</div>' : '') +
         (mg.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(mg.frist) + '</div>' : '') +
         (mg.uebernommen ? '<div style="font-size:8pt">Bereits seit Begehung vom ' + fmtDate(mg.uebernommenSeit) + ' offen</div>' : '') +
@@ -5740,7 +5742,7 @@ function doExport() {
       }
       bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE"><strong>' + bm.checkName + '</strong> ' +
         '<span style="background:#FDEDEC;color:#C0392B;padding:1px 7px;border-radius:10px;font-size:8pt;font-weight:700">' + dCap + '</span>' +
-        (bm.beschreibung ? '<br><span style="font-size:9pt">' + bm.beschreibung + '</span>' : '') +
+        (ohneHerkunft(bm.beschreibung) ? '<br><span style="font-size:9pt">' + ohneHerkunft(bm.beschreibung) + '</span>' : '') +
         fristHtml +
         (bm.zustaendig ? '<br><span style="font-size:8.5pt;color:#717D7E">Zuständig: ' + bm.zustaendig + '</span>' : '') +
         bmFotos +
@@ -5846,7 +5848,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03e';
+var APP_STAND = '2026-11-03g';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5872,7 +5874,9 @@ function aktuellerSchnellmangel() {
 function schnellmangelMailText(insp, m, mitAnhang) {
   var dringCap = m.dringlichkeit.charAt(0).toUpperCase() + m.dringlichkeit.slice(1);
   var kontakt = centerleiterKontaktFor(insp.standort);
-  var vorname = kontakt ? (kontakt.name || '').trim().split(' ')[0] : '';
+  // Rufname in Klammern hat Vorrang: „Beate (Bea) Muster“ wird mit „Bea“ angesprochen
+  var rufM = kontakt ? (kontakt.name || '').match(/\(([^)]+)\)/) : null;
+  var vorname = rufM ? rufM[1].trim() : (kontakt ? (kontakt.name || '').trim().split(' ')[0] : '');
   var zustaendig = (m.zustaendig || '').trim();
   // "Zuständig" weglassen, wenn es ohnehin der Empfänger ist
   var zustEmpfaenger = zustaendig && vorname && zustaendig.split(' ')[0].toLowerCase() === vorname.toLowerCase();
@@ -5882,7 +5886,7 @@ function schnellmangelMailText(insp, m, mitAnhang) {
       subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum),
       body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
         'bei der Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' habe ich einen Mangel festgestellt, gegen den ich sicherheitstechnische Bedenken habe:\n\n' +
-        (m.beschreibung || '') + '\n\nDringlichkeit: ' + dringCap +
+        (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + dringCap +
         (zustaendig ? '\nZuständig: ' + zustaendig : '') +
         (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
         (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
@@ -5893,7 +5897,7 @@ function schnellmangelMailText(insp, m, mitAnhang) {
     subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum),
     body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
       'bei meiner Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' ist mir folgender Mangel aufgefallen:\n\n' +
-      (m.beschreibung || '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
+      (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
       (zustaendig && !zustEmpfaenger ? '\nZuständig: ' + zustaendig : '') +
       (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
       (vorname ? 'Kümmerst du dich bitte' : 'Kümmert ihr euch bitte') + (m.frist ? ' bis zum ' + fmtDate(m.frist) : '') + ' darum und ' +
@@ -6102,7 +6106,7 @@ function schnellmangelDokument() {
       '</div>' +
       '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
       '<span class="db ' + dc + '">' + dCap + '</span></div>' +
-      '<div class="mb-b"><div>' + (m.beschreibung || '') + '</div>' + fristHtml +
+      '<div class="mb-b"><div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' + fristHtml +
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       fotosEx + '</div></div>' +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung des genannten Mangels und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung des aufgeführten Mangels die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
@@ -6120,7 +6124,7 @@ function schnellmangelDokument() {
       '<div class="meta-box"><div class="meta-lbl">Gemeldet von</div><div class="meta-val" style="font-size:11pt">' + insp.begeher + '</div></div></div>' +
       '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
       '<span class="db ' + dc + '">' + dCap + '</span></div>' +
-      '<div class="mb-b"><div>' + (m.beschreibung || '') + '</div>' +
+      '<div class="mb-b"><div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' +
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       (m.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
       fotosEx + '</div></div>';
