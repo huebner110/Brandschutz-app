@@ -258,6 +258,15 @@
     .tag-haken.an { background: var(--ok); border-color: var(--ok); color: #fff; }
     .tag-liste li.erledigt .t b { text-decoration: line-through; color: var(--text-light); }
     .tag-liste .t span { white-space: normal; }
+    /* Termine heute in Mein Tag: iPhone oben als Leiste, breiter Bildschirm rechts (03.11.2026) */
+    .tag-kal li { grid-template-columns: 74px minmax(0, 1fr); cursor: default; }
+    .tag-kal .zeit { font-family: var(--zahl); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .tag-kal li.vorbei { opacity: 0.45; }
+    .tag-kal li.jetzt { background: var(--band); border-left: 4px solid var(--primary); }
+    @media (min-width: 820px) {
+      .tag-raster { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+      .tag-raster > .tag-kal { order: 2; position: sticky; top: 12px; }
+    }
     .tag-anruf { border: 0; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; color: #fff; background: var(--ok); border-radius: 999px; padding: 6px 12px; text-decoration: none; white-space: nowrap; }
     .lb-pill { font-family: var(--zahl); font-weight: 600; font-size: 12.5px; border-radius: 999px; padding: 2px 9px; white-space: nowrap; background: var(--band); color: var(--text); font-variant-numeric: tabular-nums; }
     .lb-pill.crit { background: var(--crit-bg); color: var(--crit); } .lb-pill.warn { background: var(--warn-bg); color: var(--warn); } .lb-pill.ok { background: var(--ok-bg); color: var(--ok); }
@@ -2607,14 +2616,16 @@ var TAG_ARTEN = [
   { art: 'hirschgarten', titel: 'Hirschgarten (wartet bis zum Mac)' },
   { art: 'termin', titel: 'Heute wichtig', ohneHaken: true }
 ];
+// Termine von heute in Mein Tag (Art kalender, vom Fahrt-Zettel). Zum Abschalten auf false setzen.
+var TAG_KALENDER = true;
 var FENSTER_NAME = { morgen: 'Morgen', mittag: 'Mittag', nachmittag: 'Heimfahrt' };
 
 function offeneTagespunkte() {
-  return (S.tagespunkte || []).filter(function(p) { return p && !p.erledigt && p.art !== 'termin'; });
+  return (S.tagespunkte || []).filter(function(p) { return p && !p.erledigt && p.art !== 'termin' && p.art !== 'kalender'; });
 }
 
 function vMeinTag() {
-  var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id; })
+  var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id && p.art !== 'kalender'; })
     .sort(function(a, b) { return (a.nr || 0) - (b.nr || 0); });
   var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
   var sub = neuester.erstellt ? 'Fahrt-Zettel ' + (FENSTER_NAME[neuester.fenster] || '') + ', ' + fmtDate(neuester.datum) + ' ' + escH(neuester.zeit || '') : 'noch kein Fahrt-Zettel';
@@ -2643,9 +2654,24 @@ function vMeinTag() {
   });
   if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
   if (nErledigt) html += '<button class="btn-outline" style="width:100%" data-action="tag-erledigt-zeigen">' + (S.tagErledigtZeigen ? 'Erledigte ausblenden' : 'Erledigte zeigen (' + nErledigt + ')') + '</button>';
+  if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
     '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function tagKalender() {
+  var heute = today();
+  var termine = (S.tagespunkte || []).filter(function(p) { return p && p.art === 'kalender' && p.datum === heute; })
+    .sort(function(a, b) { return (a.beginn || '').localeCompare(b.beginn || '') || (a.nr || 0) - (b.nr || 0); });
+  var d = new Date(), jetzt = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  var liste = termine.length ? termine.map(function(p) {
+    var zeit = p.beginn ? escH(p.beginn) + (p.ende ? '<br><small style="font-weight:400;color:var(--text-light)">bis ' + escH(p.ende) + '</small>' : '') : 'ganzer Tag';
+    var cls = p.beginn && p.ende && p.ende <= jetzt ? 'vorbei' : p.beginn && p.beginn <= jetzt && (!p.ende || p.ende > jetzt) ? 'jetzt' : '';
+    return '<li class="' + cls + '"><span class="zeit">' + zeit + '</span><span class="t"><b>' + escH(p.titel) + '</b>' +
+      (p.ort ? '<span>' + escH(p.ort) + '</span>' : '') + '</span></li>';
+  }).join('') : '<li><span class="zeit">–</span><span class="t"><span>Keine dienstlichen Termine eingetragen.</span></span></li>';
+  return '<div class="lb-panel tag-kal"><h2>Termine heute <small>' + fmtDate(heute) + '</small></h2><ul class="lb-todo">' + liste + '</ul></div>';
 }
 
 function tagNummerKopieren(el, nr) {
@@ -2656,7 +2682,7 @@ function tagNummerKopieren(el, nr) {
 
 function tagespunktHaken(tid) {
   var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
-  if (!p || p.art === 'termin') return;
+  if (!p || p.art === 'termin' || p.art === 'kalender') return;
   p.erledigt = !p.erledigt;
   p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
   save();
@@ -5665,7 +5691,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-02b';
+var APP_STAND = '2026-11-03a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
