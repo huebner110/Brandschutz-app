@@ -268,6 +268,7 @@
       .tag-raster > .tag-kal { order: 2; position: sticky; top: 12px; }
     }
     /* Auftrag an Claude direkt aus einem Punkt (03.11.2026) */
+    .tag-auftrag-knopf.an { background: var(--primary); border-color: var(--primary); color: #fff; }
     .tag-auftrag-knopf { border: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 5px 10px; white-space: nowrap; }
     .tag-liste li.tag-auftrag-form { display: block; background: var(--band); cursor: default; }
     .tag-auftrag-form textarea { width: 100%; min-height: 70px; font-family: inherit; font-size: 15px; padding: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); box-sizing: border-box; }
@@ -2622,8 +2623,11 @@ var TAG_ARTEN = [
   { art: 'freigabe', titel: 'Freigeben (Entwürfe in Mail)' },
   { art: 'rueckfrage', titel: 'Rückfragen an dich' },
   { art: 'hirschgarten', titel: 'Hirschgarten (wartet bis zum Mac)' },
-  { art: 'termin', titel: 'Heute wichtig', ohneHaken: true }
+  { art: 'termin', titel: 'Heute wichtig' }
 ];
+// Begehung heute nicht geschafft: Knopf „Verschieben“ mit neuem Tag (nur Mo bis Do). Geht als Auftrag an den
+// Server, der den Kalendertermin verschiebt und den Punkt abhakt (seit 03.11.2026). Zum Abschalten false.
+var TAG_VERSCHIEBEN = true;
 // Termine von heute in Mein Tag (Art kalender, vom Fahrt-Zettel). Zum Abschalten auf false setzen.
 var TAG_KALENDER = true;
 // Auftrag an Claude aus einem Punkt: Feld auftrag geht über den Abgleich an den Server (tag-auftraege.py),
@@ -2658,9 +2662,11 @@ function vMeinTag() {
         // Thomas telefoniert über die 3CX-App: Nummer kopieren und dort einfügen
         var rechts = g.art === 'anruf' && nummer.length >= 6 ? '<button class="tag-anruf" data-action="tag-nummer" data-nr="' + nummer + '">Kopieren</button>'
           : g.art === 'anruf' ? '<span class="lb-pill warn">Nummer fehlt</span>' : '';
+        var verschiebbar = TAG_VERSCHIEBEN && tagIstBegehung(p) && !p.erledigt && !(p.verschiebenAuf && p.auftragStatus !== 'rueckfrage');
         if (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt) rechts = '<span style="display:flex;gap:6px;align-items:center">' + rechts +
-          '<button class="tag-auftrag-knopf" data-action="tag-auftrag" data-tid="' + escH(p.id) + '">' + (g.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + '</button></span>';
-        var auftragZeile = !TAG_AUFTRAG || !p.auftrag ? '' : '<span class="auftrag">' + (p.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + ': ' + escH(p.auftrag) + ' · ' +
+          (verschiebbar ? '<button class="tag-auftrag-knopf" data-action="tag-verschieben" data-tid="' + escH(p.id) + '">↷ Verschieben</button>'
+            : '<button class="tag-auftrag-knopf" data-action="tag-auftrag" data-tid="' + escH(p.id) + '">' + (g.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + '</button>') + '</span>';
+        var auftragZeile = !TAG_AUFTRAG || !p.auftrag ? '' : '<span class="auftrag">' + (p.verschiebenAuf ? 'Verschieben auf ' + fmtDate(p.verschiebenAuf) : (p.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + ': ' + escH(p.auftrag)) + ' · ' +
           (p.auftragStatus === 'erledigt' ? 'erledigt' + (p.auftragErgebnis ? ': ' + escH(p.auftragErgebnis) : '')
             : p.auftragStatus === 'rueckfrage' ? 'Rückfrage' + (p.auftragErgebnis ? ': ' + escH(p.auftragErgebnis) : '')
             : 'wird bearbeitet (ein paar Minuten)') + '</span>';
@@ -2669,8 +2675,10 @@ function vMeinTag() {
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
           '<span class="t"><b>' + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
-          (p.text ? '<span>' + escH(p.text) + '</span>' : '') + auftragZeile + '</span>' + rechts + '</li>' +
-          (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '');
+          (p.text ? '<span>' + escH(p.text) + '</span>' : '') + auftragZeile +
+          (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
+          (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
+          (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
       }).join('') + '</ul></div>';
   });
   if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
@@ -2679,6 +2687,51 @@ function vMeinTag() {
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
     '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
+}
+
+function tagIstBegehung(p) {
+  return !!p && p.art === 'termin' && !!((p.bezug && p.bezug.begehung) || /begehung/i.test(p.titel || ''));
+}
+
+// Nächste Arbeitstage (Mo bis Do, Thomas arbeitet freitags nicht) nach dem Tag des Punkts, als JJJJ-MM-TT (Ortszeit)
+function tagArbeitstage(ab, anzahl) {
+  var d = new Date((ab || today()) + 'T12:00:00'), liste = [];
+  while (liste.length < anzahl) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() >= 1 && d.getDay() <= 4) liste.push(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2));
+  }
+  return liste;
+}
+
+var WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+function tagVerschiebenForm(p) {
+  var tage = tagArbeitstage(p.datum, 4), gewaehlt = S.tagVerschiebenAuf || '';
+  return '<li class="tag-auftrag-form"><div style="font-size:13px;margin-bottom:6px">Auf welchen Tag? (nur Mo bis Do)</div><div class="chips">' + tage.map(function(t) {
+      var d = new Date(t + 'T12:00:00');
+      return '<button class="tag-auftrag-knopf' + (t === gewaehlt ? ' an' : '') + '" data-action="tag-verschieben-tag" data-tag="' + t + '">' + WOCHENTAG_KURZ[d.getDay()] + ' ' + fmtDate(t) + '</button>';
+    }).join('') + '<input type="date" id="tag-verschieben-datum" min="' + tage[0] + '" value="' + escH(gewaehlt) + '" style="font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--card);color:var(--text)"></div>' +
+    '<textarea id="tag-auftrag-text" placeholder="Grund (freiwillig), z. B. Notdienst Hirschgarten">' + escH(S.tagAuftragText || '') + '</textarea>' +
+    '<div class="knoepfe"><button class="btn-outline" data-action="tag-verschieben-abbrechen">Abbrechen</button>' +
+    '<button class="btn-primary" data-action="tag-verschieben-senden" data-tid="' + escH(p.id) + '">Verschieben</button></div></li>';
+}
+
+function tagVerschiebenSenden(tid) {
+  var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
+  var feld = document.getElementById('tag-verschieben-datum');
+  var auf = (feld && feld.value) || S.tagVerschiebenAuf || '';
+  if (!p) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(auf)) { alert('Bitte einen Tag auswählen.'); return; }
+  var tag = new Date(auf + 'T12:00:00').getDay();
+  if (tag < 1 || tag > 4) { alert('Bitte einen Tag von Montag bis Donnerstag wählen.'); return; }
+  if (auf <= (p.datum || today())) { alert('Bitte einen Tag nach heute wählen.'); return; }
+  var grund = (S.tagAuftragText || '').trim();
+  p.verschiebenAuf = auf;
+  p.auftrag = ('Begehung verschieben: „' + p.titel + '“ vom ' + fmtDate(p.datum) + ' auf ' + WOCHENTAG_KURZ[tag] + ' ' + fmtDate(auf) + '.' + (grund ? ' Grund: ' + grund : '')).slice(0, 1000);
+  p.auftragAm = new Date().toISOString();
+  p.auftragStatus = ''; p.auftragErgebnis = '';
+  S.tagVerschiebenOffen = null; S.tagVerschiebenAuf = ''; S.tagAuftragText = '';
+  save();
+  render();
 }
 
 function tagAuftragVorlagen(tid) {
@@ -2763,7 +2816,7 @@ function tagNummerKopieren(el, nr) {
 
 function tagespunktHaken(tid) {
   var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
-  if (!p || p.art === 'termin' || p.art === 'kalender') return;
+  if (!p || p.art === 'kalender') return;
   p.erledigt = !p.erledigt;
   p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
   save();
@@ -4652,6 +4705,10 @@ document.addEventListener('click', function(e) {
   if (a.action === 'tag-mikro') { tagMikro(); return; }
   if (a.action === 'tag-auftrag-abbrechen') { if (tagErkennung) tagErkennung.stop(); S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-auftrag-senden') { var ta = document.getElementById('tag-auftrag-text'); if (ta) S.tagAuftragText = ta.value; tagAuftragSenden(a.tid); return; }
+  if (a.action === 'tag-verschieben') { S.tagVerschiebenOffen = S.tagVerschiebenOffen === a.tid ? null : a.tid; S.tagVerschiebenAuf = ''; S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
+  if (a.action === 'tag-verschieben-tag') { var tt = document.getElementById('tag-auftrag-text'); if (tt) S.tagAuftragText = tt.value; S.tagVerschiebenAuf = a.tag; render(); return; }
+  if (a.action === 'tag-verschieben-abbrechen') { S.tagVerschiebenOffen = null; S.tagVerschiebenAuf = ''; S.tagAuftragText = ''; render(); return; }
+  if (a.action === 'tag-verschieben-senden') { var tg = document.getElementById('tag-auftrag-text'); if (tg) S.tagAuftragText = tg.value; tagVerschiebenSenden(a.tid); return; }
   if (a.action === 'tag-erledigt-zeigen') { S.tagErledigtZeigen = !S.tagErledigtZeigen; render(); return; }
   if (a.action === 'tag-nummer') { tagNummerKopieren(el, a.nr); return; }
   if (a.action === 'go-standort') { S.standortAnsicht = a.loc || S.lastStandort; S.lastStandort = S.standortAnsicht; nav('standort'); return; }
@@ -5780,7 +5837,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03c';
+var APP_STAND = '2026-11-03d';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
