@@ -2691,11 +2691,45 @@ function tagAuftragForm(p) {
       return '<button class="tag-auftrag-knopf" data-action="tag-auftrag-vorlage" data-idx="' + i + '">' + escH(v) + '</button>';
     }).join('') + '</div>' +
     '<textarea id="tag-auftrag-text" placeholder="' + (p.art === 'anruf' ? 'Was kam beim Anruf heraus? ' : 'Was soll Claude dazu tun? ') + 'Tippen oder mit dem Mikrofon der Tastatur sprechen.">' + escH(S.tagAuftragText || '') + '</textarea>' +
-    '<div class="knoepfe"><button class="btn-outline" data-action="tag-auftrag-abbrechen">Abbrechen</button>' +
+    '<div class="knoepfe">' + (tagSpracheMoeglich() ? '<button class="btn-outline" id="tag-mikro" data-action="tag-mikro">' + (S.tagMikroAn ? '■ Stopp' : '🎤 Sprechen') + '</button>' : '') +
+    '<button class="btn-outline" data-action="tag-auftrag-abbrechen">Abbrechen</button>' +
     '<button class="btn-primary" data-action="tag-auftrag-senden" data-tid="' + escH(p.id) + '">An Claude geben</button></div></li>';
 }
 
+// Eigener Mikrofon-Knopf (Spracherkennung des Browsers), weil das Mac-Diktat nicht überall eingerichtet ist (03.11.2026)
+var tagErkennung = null;
+function tagSpracheMoeglich() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+function tagMikro() {
+  var feld = document.getElementById('tag-auftrag-text');
+  if (tagErkennung) { tagErkennung.stop(); return; }
+  var Erk = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Erk || !feld) return;
+  var erk = new Erk();
+  erk.lang = 'de-DE'; erk.continuous = true; erk.interimResults = true;
+  var basis = feld.value ? feld.value.replace(/\s+$/, '') + ' ' : '';
+  erk.onresult = function(e) {
+    var fertig = '', vorlaeufig = '';
+    for (var i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) fertig += e.results[i][0].transcript; else vorlaeufig += e.results[i][0].transcript;
+    }
+    var f = document.getElementById('tag-auftrag-text');
+    if (f) { f.value = basis + fertig + vorlaeufig; S.tagAuftragText = f.value; }
+  };
+  erk.onerror = function(e) {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') alert('Das Mikrofon ist für diese Seite nicht erlaubt. Bitte in den Browser-Einstellungen für diese Seite das Mikrofon erlauben.');
+  };
+  erk.onend = function() {
+    tagErkennung = null; S.tagMikroAn = false;
+    var k = document.getElementById('tag-mikro'); if (k) k.textContent = '🎤 Sprechen';
+  };
+  try { erk.start(); } catch (x) { return; }
+  tagErkennung = erk; S.tagMikroAn = true;
+  var k = document.getElementById('tag-mikro'); if (k) k.textContent = '■ Stopp';
+}
+
 function tagAuftragSenden(tid) {
+  if (tagErkennung) tagErkennung.stop();
   var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
   var text = (S.tagAuftragText || '').trim();
   if (!p || !text) { alert('Bitte zuerst eintragen, was Claude tun soll.'); return; }
@@ -4615,7 +4649,8 @@ document.addEventListener('click', function(e) {
     setTimeout(function() { var t = document.getElementById('tag-auftrag-text'); if (t) t.focus(); }, 50); return; }
   if (a.action === 'tag-auftrag-vorlage') { var tv = document.getElementById('tag-auftrag-text'); var vw = tagAuftragVorlagen(S.tagAuftragOffen)[parseInt(a.idx, 10)] || '';
     S.tagAuftragText = tv && tv.value.trim() ? tv.value.trim() + '. ' + vw : vw; if (tv) { tv.value = S.tagAuftragText; tv.focus(); } return; }
-  if (a.action === 'tag-auftrag-abbrechen') { S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
+  if (a.action === 'tag-mikro') { tagMikro(); return; }
+  if (a.action === 'tag-auftrag-abbrechen') { if (tagErkennung) tagErkennung.stop(); S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-auftrag-senden') { var ta = document.getElementById('tag-auftrag-text'); if (ta) S.tagAuftragText = ta.value; tagAuftragSenden(a.tid); return; }
   if (a.action === 'tag-erledigt-zeigen') { S.tagErledigtZeigen = !S.tagErledigtZeigen; render(); return; }
   if (a.action === 'tag-nummer') { tagNummerKopieren(el, a.nr); return; }
@@ -5745,7 +5780,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03b';
+var APP_STAND = '2026-11-03c';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
