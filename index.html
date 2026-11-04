@@ -114,6 +114,12 @@
     .check-item-name { font-size: 13px; line-height: 1.4; margin-bottom: 8px; }
     .check-stockwerk-row { display: flex; gap: 6px; margin-bottom: 8px; }
     .check-stockwerk-select { appearance: none; -webkit-appearance: none; background-color: var(--bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23808B96' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; border: 1px solid var(--border); border-radius: 7px; padding: 4px 26px 4px 9px; font-size: 11px; font-weight: 600; color: var(--text-light); font-family: inherit; }
+    .tuer-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .tuer-label { font-size: 11px; font-weight: 600; color: var(--text-light); margin-right: 2px; }
+    .tuer-chip { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 5px 11px; min-height: 30px; font-size: 12px; font-weight: 600; color: var(--text-light); cursor: pointer; font-family: inherit; }
+    .tuer-chip-on { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+    .tuer-chip-neu { border-style: dashed; }
+    .tuer-neu-row { display: flex; gap: 6px; margin-bottom: 8px; }
     .check-stockwerk-custom { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; font-size: 11px; color: var(--text); background: var(--band); font-family: inherit; }
     .check-buttons { display: flex; gap: 6px; }
     .check-btn { flex: 1; padding: 7px 4px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; color: var(--text-light); }
@@ -862,6 +868,7 @@ function saveInsp() {
   for (var i = 0; i < S.inspections.length; i++) {
     if (S.inspections[i].id === S.currentInspection.id) { idx = i; break; }
   }
+  tuerenAbgleichen(S.currentInspection);
   if (idx !== -1) S.inspections[idx] = S.currentInspection;
   else S.inspections.push(S.currentInspection);
   vorgaengerAbschliessen(S.currentInspection);
@@ -1383,6 +1390,7 @@ function mangelKarteHtml(it, mitStandort) {
     '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div>' +
     '<div class="mangel-card-item">' + escH(mangelKurz(m)) + '</div>' +
     (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 ? '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' : '') +
+    (mangelTueren(m, it.insp).length ? '<div class="mangel-card-frist">Türen: ' + escH(tuerenText(mangelTueren(m, it.insp))) + '</div>' : '') +
     (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
     (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
     (beiAnderen(m) ? '<div class="mangel-card-frist" style="font-weight:700">Liegt bei anderen</div>' : '') +
@@ -1535,9 +1543,10 @@ function vInspection() {
             extraHtml += '</div>';
           }
         }
+        var tuerHtml = istTuerKategorie(cat) ? tuerenHtml(item.id, check, insp.standort) : '';
         itemsHtml += '<div class="check-item' + (status ? ' check-item-' + status : '') + '">' +
           '<div class="check-item-name">' + item.name + '</div>' +
-          stockwerkHtml +
+          tuerHtml + stockwerkHtml +
           mangelPreview + extraHtml +
           '<div class="check-buttons">' +
           '<button class="check-btn check-btn-ok' + (status === 'ok' ? ' active' : '') + '" data-action="check-ok" data-iid="' + item.id + '">OK</button>' +
@@ -1754,6 +1763,7 @@ function vSummary() {
         '<div style="display:flex;gap:4px;align-items:center">' + bedenkenBadge + '<span class="dring-badge dring-' + m.dringlichkeit + '">' + (m.behoben ? 'behoben' : m.dringlichkeit) + '</span></div></div>' +
         '<div class="mangel-card-item">' + m.checkName + '</div>' +
         ((insp.checks[m.checkId] || {}).stockwerk ? '<div class="mangel-card-frist">Stockwerk: ' + insp.checks[m.checkId].stockwerk + '</div>' : '') +
+        (mangelTueren(m, insp).length ? '<div class="mangel-card-frist">Türen: ' + escH(tuerenText(mangelTueren(m, insp))) + '</div>' : '') +
         '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' +
         (m.frist ? '<div class="mangel-card-frist">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
         (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
@@ -1781,7 +1791,7 @@ function vSummary() {
   var clListeText = '';
   for (var mci = 0; mci < maengelOffen.length; mci++) {
     var mc = maengelOffen[mci];
-    clListeText += '- ' + mc.checkName + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + (ohneHerkunft(mc.beschreibung) || '') + '\n\n';
+    clListeText += '- ' + mc.checkName + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + (ohneHerkunft(mc.beschreibung) || '') + '\n\n';
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
@@ -2127,7 +2137,7 @@ function vHilfe() {
 
     '<div class="section-header">Startbildschirm</div>' +
     hSection('📋', 'Begehung starten',
-      'Standort wählen, dann "Begehung starten" tippen. Jeden Prüfpunkt mit OK, Mangel oder N.A. bewerten. "Übrige als OK markieren" setzt alle noch offenen Punkte eines Bereichs auf OK, fertige Bereiche klappen zu. Das Stockwerk erscheint, sobald ein Mangel gewählt ist. Beim Verlassen bleibt alles gespeichert, unfertige Begehungen stehen oben auf der Startseite unter "Begehung fortsetzen". Löschen: Begehung öffnen, ganz unten "Begehung löschen".') +
+      'Standort wählen, dann "Begehung starten" tippen. Jeden Prüfpunkt mit OK, Mangel oder N.A. bewerten. "Übrige als OK markieren" setzt alle noch offenen Punkte eines Bereichs auf OK, fertige Bereiche klappen zu. Das Stockwerk erscheint, sobald ein Mangel gewählt ist. Bei Brandschutztüren lassen sich am Prüfpunkt mehrere Türen antippen (Häkchen, nochmal tippen nimmt sie weg). "+ Tür …" legt die nächste Nummer an, "+ Name…" einen eigenen Namen wie Kursraum 1. Die Türen stehen dann in Protokoll, PDF, Mail und bei übernommenen Mängeln. Beim Verlassen bleibt alles gespeichert, unfertige Begehungen stehen oben auf der Startseite unter "Begehung fortsetzen". Löschen: Begehung öffnen, ganz unten "Begehung löschen".') +
     hSection('⚠️', 'Hinweis-Banner',
       'Erscheint automatisch wenn eine Begehung oder Unterweisung überfällig oder in Kürze fällig ist. Gelb = demnächst fällig, Rot = überfällig. Intervalle werden in den Einstellungen je Standort festgelegt.') +
 
@@ -4136,6 +4146,106 @@ function changeInspAnwesende(val) {
   S.currentInspection.anwesende = val;
   saveInsp();
 }
+/* Mehrere Türen je Prüfpunkt (Kategorie Brandschutztüren), seit 04.11.2026.
+   check.tueren = Liste der gewählten Türen, z. B. ['Tür 1', 'Tür 3']. Ältere Begehungen haben keine
+   Liste (= keine Tür gewählt). Ein einzelner Text in check.tuer würde als Liste mit einem Eintrag gelesen.
+   Hat der Prüfpunkt einen Mangel, steht dieselbe Liste auch am Mangel (m.tueren), damit sie in
+   Mängelliste, Mails, PDF und in die nächste Begehung (Mängelübernahme) mitgeht.
+   insp.tuerNamen = neu angelegte Türnamen dieser Begehung; daraus und aus früheren Auswahlen
+   entsteht die Liste zum Antippen je Standort. */
+function istTuerKategorie(cat) {
+  return !!cat && (cat.id === 'bst' || /brandschutzt[üu]r|feuerschutz/i.test(cat.name || ''));
+}
+function tuerListe(x) {
+  if (!x) return [];
+  var l = Array.isArray(x.tueren) ? x.tueren : (typeof x.tuer === 'string' ? [x.tuer] : []);
+  var r = [];
+  l.forEach(function(t) { t = typeof t === 'string' ? t.trim() : ''; if (t && r.indexOf(t) === -1) r.push(t); });
+  return r;
+}
+function tuerSort(a, b) { return a.localeCompare(b, 'de', { numeric: true }); }
+function tuerenText(l) { return (l || []).slice().sort(tuerSort).join(', '); }
+function mangelTueren(m, insp) {
+  var l = tuerListe(m);
+  if (!l.length && insp && insp.checks && m && m.checkId) l = tuerListe(insp.checks[m.checkId]);
+  return l;
+}
+// Alle Türnamen, die an diesem Standort schon einmal gewählt wurden (zum schnellen Antippen)
+function tuerenBekannt(standort) {
+  var r = [], ids = {};
+  S.categories.forEach(function(c) { if (istTuerKategorie(c)) c.items.forEach(function(i) { ids[i.id] = 1; }); });
+  var liste = (S.inspections || []).slice();
+  if (S.currentInspection && liste.indexOf(S.currentInspection) === -1) liste.push(S.currentInspection);
+  liste.forEach(function(insp) {
+    if (!insp || insp.standort !== standort) return;
+    tuerListe({ tueren: insp.tuerNamen }).forEach(function(t) { if (r.indexOf(t) === -1) r.push(t); });
+    Object.keys(insp.checks || {}).forEach(function(k) {
+      if (ids[k]) tuerListe(insp.checks[k]).forEach(function(t) { if (r.indexOf(t) === -1) r.push(t); });
+    });
+    (insp.maengel || []).forEach(function(m) {
+      if (ids[m.checkId]) tuerListe(m).forEach(function(t) { if (r.indexOf(t) === -1) r.push(t); });
+    });
+  });
+  return r.sort(tuerSort);
+}
+// Überträgt die Türliste des Prüfpunkts auf seinen Mangel (bei jedem Speichern der Begehung)
+function tuerenAbgleichen(insp) {
+  if (!insp || !insp.checks) return;
+  (insp.maengel || []).forEach(function(m) {
+    var ch = insp.checks[m.checkId];
+    if (!ch || !Array.isArray(ch.tueren)) return;
+    if (ch.tueren.length) m.tueren = ch.tueren.slice(); else delete m.tueren;
+  });
+}
+function tuerSetzen(iid, liste) {
+  if (!S.currentInspection) return;
+  if (!S.currentInspection.checks[iid]) S.currentInspection.checks[iid] = {};
+  S.currentInspection.checks[iid].tueren = liste.slice().sort(tuerSort);
+  saveInsp();
+  render();
+}
+function tuerUmschalten(iid, name) {
+  if (!S.currentInspection || !name) return;
+  var l = tuerListe(S.currentInspection.checks[iid]);
+  var p = l.indexOf(name);
+  if (p === -1) l.push(name); else l.splice(p, 1);
+  tuerSetzen(iid, l);
+}
+function tuerNeuZeigen(iid) {
+  S.tuerEingabe = S.tuerEingabe === iid ? null : iid;
+  render();
+  setTimeout(function() { var f = document.getElementById('tuer-neu-' + iid); if (f) f.focus(); }, 30);
+}
+function tuerHinzufuegen(iid, name) {
+  name = String(name || '').replace(/[<>"'\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  S.tuerEingabe = null;
+  if (!name) { render(); return; }
+  var l = tuerListe((S.currentInspection.checks || {})[iid]);
+  if (l.indexOf(name) === -1) l.push(name);
+  // Name merken, damit die Tür auch nach dem Abwählen antippbar bleibt (auch in späteren Begehungen am Standort)
+  var nl = tuerListe({ tueren: S.currentInspection.tuerNamen });
+  if (nl.indexOf(name) === -1) { nl.push(name); S.currentInspection.tuerNamen = nl.sort(tuerSort); }
+  tuerSetzen(iid, l);
+}
+function tuerenHtml(iid, check, standort) {
+  var gew = tuerListe(check);
+  var alle = tuerenBekannt(standort);
+  gew.forEach(function(t) { if (alle.indexOf(t) === -1) alle.push(t); });
+  alle.sort(tuerSort);
+  var n = 1;
+  while (alle.indexOf('Tür ' + n) !== -1) n++;
+  var h = '<div class="tuer-row"><span class="tuer-label">Türen:</span>' + alle.map(function(t) {
+    var an = gew.indexOf(t) !== -1;
+    return '<button type="button" class="tuer-chip' + (an ? ' tuer-chip-on' : '') + '" data-t="' + escH(t) + '" onclick="tuerUmschalten(\'' + iid + '\', this.dataset.t)">' + (an ? '&#10003; ' : '') + escH(t) + '</button>';
+  }).join('') +
+    '<button type="button" class="tuer-chip tuer-chip-neu" onclick="tuerHinzufuegen(\'' + iid + '\', \'Tür ' + n + '\')">+ Tür ' + n + '</button>' +
+    '<button type="button" class="tuer-chip tuer-chip-neu" onclick="tuerNeuZeigen(\'' + iid + '\')">+ Name…</button></div>';
+  if (S.tuerEingabe === iid) {
+    h += '<div class="tuer-neu-row"><input type="text" class="check-stockwerk-custom" id="tuer-neu-' + iid + '" maxlength="40" placeholder="z.B. Kursraum 1 oder 1.OG Treppenhaus" onkeydown="if(event.key===\'Enter\'){tuerHinzufuegen(\'' + iid + '\', this.value)}">' +
+      '<button type="button" class="tuer-chip" onclick="tuerHinzufuegen(\'' + iid + '\', document.getElementById(\'tuer-neu-' + iid + '\').value)">Hinzufügen</button></div>';
+  }
+  return h;
+}
 function setCheckStockwerk(iid, val) {
   if (!S.currentInspection) return;
   if (!S.currentInspection.checks[iid]) S.currentInspection.checks[iid] = {};
@@ -5076,7 +5186,10 @@ document.addEventListener('click', function(e) {
     var offeneVorher = letzteOffeneMaengelStandort(standort);
     for (var ov = 0; ov < offeneVorher.length; ov++) {
       var vm = offeneVorher[ov].mangel;
-      S.currentInspection.checks[vm.checkId] = { status: 'mangel' };
+      var vmInsp = null;
+      for (var vi = 0; vi < S.inspections.length; vi++) { if (S.inspections[vi].id === offeneVorher[ov].inspId) { vmInsp = S.inspections[vi]; break; } }
+      var vmTueren = mangelTueren(vm, vmInsp);
+      S.currentInspection.checks[vm.checkId] = vmTueren.length ? { status: 'mangel', tueren: vmTueren.slice() } : { status: 'mangel' };
       S.currentInspection.maengel.push({
         id: uid(), checkId: vm.checkId, checkName: vm.checkName,
         beschreibung: vm.beschreibung, dringlichkeit: vm.dringlichkeit,
@@ -5084,6 +5197,7 @@ document.addEventListener('click', function(e) {
         uebernommen: true, uebernommenSeit: vm.uebernommenSeit || offeneVorher[ov].datum,
         beiAnderen: !!vm.beiAnderen
       });
+      if (vmTueren.length) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].tueren = vmTueren.slice();
       if (offeneVorher[ov].inspId) S.currentInspection.weiterVon = (S.currentInspection.weiterVon || []).concat([{ inspId: offeneVorher[ov].inspId, mid: vm.id }]);
     }
     S.collapsedCats = fertigeBereiche(S.currentInspection);
@@ -5599,7 +5713,7 @@ document.getElementById('xlsx-input').addEventListener('change', function(e) {
 
 /* ── BEGEHUNGEN CSV EXPORT ── */
 function doCSV() {
-  var rows = ['Standort;Datum;Begeher;Anwesende;Prüfpunkt;Kategorie;Status;Mangel-Beschreibung;Dringlichkeit;Zuständig;Frist;Behoben'];
+  var rows = ['Standort;Datum;Begeher;Anwesende;Prüfpunkt;Kategorie;Status;Mangel-Beschreibung;Dringlichkeit;Zuständig;Frist;Behoben;Türen'];
   for (var ii = 0; ii < S.inspections.length; ii++) {
     var insp = S.inspections[ii];
     var checks = insp.checks || {};
@@ -5621,7 +5735,8 @@ function doCSV() {
           m ? (m.dringlichkeit || '') : '',
           m ? (m.zustaendig || '') : '',
           m ? (m.frist ? fmtDate(m.frist) : '') : '',
-          m ? (m.behoben ? 'Ja' : 'Nein') : ''
+          m ? (m.behoben ? 'Ja' : 'Nein') : '',
+          tuerenText(tuerListe(ch).length ? tuerListe(ch) : (m ? tuerListe(m) : []))
         ].map(function(v) { return '"' + String(v).replace(/"/g,'""') + '"'; }).join(';'));
       }
     }
@@ -5662,8 +5777,10 @@ function doExport() {
         if (maengel[mi].checkId === item.id) { m = maengel[mi]; break; }
       }
       var stockwerkTd = '<td>' + (ch.stockwerk || '') + '</td>';
+      var pdfTueren = tuerListe(ch).length ? tuerListe(ch) : (m ? tuerListe(m) : []);
+      var itemTd = '<td>' + item.name + (pdfTueren.length ? '<div style="font-size:7.5pt;color:#717D7E;margin-top:2px">Türen: ' + escH(tuerenText(pdfTueren)) + '</div>' : '') + '</td>';
       if (!ch.status) {
-        rows += '<tr><td>' + item.name + '</td>' + stockwerkTd + '<td class="s-na">–</td><td></td></tr>';
+        rows += '<tr>' + itemTd + stockwerkTd + '<td class="s-na">–</td><td></td></tr>';
       } else {
         var st = ch.status === 'ok' ? 'In Ordnung' : ch.status === 'mangel' ? 'Mangel' : 'N.A.';
         var sc = ch.status === 'ok' ? 's-ok' : ch.status === 'mangel' ? 's-mn' : 's-na';
@@ -5677,7 +5794,7 @@ function doExport() {
           }
           checkFotosHtml += '</div>';
         }
-        rows += '<tr' + (checkFotosHtml ? ' class="has-photos"' : '') + '><td>' + item.name + '</td>' + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
+        rows += '<tr' + (checkFotosHtml ? ' class="has-photos"' : '') + '>' + itemTd + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
       }
     }
     tableRows += '<table><thead><tr><th style="width:44%">' + cat.name + '</th><th style="width:12%">Stockwerk</th><th style="width:13%">Status</th><th>Bemerkung</th></tr></thead><tbody>' + rows + '</tbody></table>';
@@ -5708,11 +5825,14 @@ function doExport() {
       var dringCap = mg.dringlichkeit.charAt(0).toUpperCase() + mg.dringlichkeit.slice(1);
       var behobHtml = mg.behoben ? '<span class="db" style="background:#F2F3F4;color:#808B96">Behoben ' + (mg.behobDatum ? fmtDate(mg.behobDatum) : '') + '</span>' : '';
       var mgStockwerk = (checks[mg.checkId] || {}).stockwerk || '';
+      var mgTueren = tuerenText(mangelTueren(mg, insp));
+      if (mgStockwerk) mgStockwerk = 'Stockwerk: ' + mgStockwerk;
+      if (mgTueren) mgStockwerk = (mgStockwerk ? mgStockwerk + ' &middot; ' : '') + 'Türen: ' + escH(mgTueren);
       maengelSection += '<div class="mb">' +
         '<div class="mb-h"><strong>' + (mi2+1) + '. ' + mg.checkName + '</strong>' +
         '<div style="display:flex;gap:4px"><span class="db ' + dc + '">' + dringCap + '</span>' + behobHtml + '</div></div>' +
         '<div class="mb-b">' +
-        (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + (mgStockwerk ? ' &middot; Stockwerk: ' + mgStockwerk : '') + '</div>' : (mgStockwerk ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Stockwerk: ' + mgStockwerk + '</div>' : '')) +
+        (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + (mgStockwerk ? ' &middot; ' + mgStockwerk : '') + '</div>' : (mgStockwerk ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">' + mgStockwerk + '</div>' : '')) +
         '<div>' + (ohneHerkunft(mg.beschreibung) || '') + '</div>' +
         (mg.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + mg.zustaendig + '</div>' : '') +
         (mg.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(mg.frist) + '</div>' : '') +
@@ -5770,6 +5890,7 @@ function doExport() {
         fristHtml = '<br><span style="font-size:8.5pt;font-weight:700;color:' + fristColor + '">' + fristLabel + '</span>';
       }
       bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE"><strong>' + bm.checkName + '</strong> ' +
+        (mangelTueren(bm, insp).length ? '<span style="font-size:8.5pt;color:#717D7E">(Türen: ' + escH(tuerenText(mangelTueren(bm, insp))) + ')</span> ' : '') +
         '<span style="background:#FDEDEC;color:#C0392B;padding:1px 7px;border-radius:10px;font-size:8pt;font-weight:700">' + dCap + '</span>' +
         (ohneHerkunft(bm.beschreibung) ? '<br><span style="font-size:9pt">' + ohneHerkunft(bm.beschreibung) + '</span>' : '') +
         fristHtml +
@@ -5877,7 +5998,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-03m';
+var APP_STAND = '2026-11-04b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5919,7 +6040,7 @@ function schnellmangelMailText(insp, m, mitAnhang) {
       subject: 'Bedenkenanzeige ' + insp.standort + ', ' + fmtDate(insp.datum) + betreffKurz,
       body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
         'bei der Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' habe ich einen Mangel festgestellt, gegen den ich sicherheitstechnische Bedenken habe:\n\n' +
-        (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + dringCap +
+        (ohneHerkunft(m.beschreibung) || '') + (mangelTueren(m, insp).length ? '\nTüren: ' + tuerenText(mangelTueren(m, insp)) : '') + '\n\nDringlichkeit: ' + dringCap +
         (zustaendig ? '\nZuständig: ' + zustaendig : '') +
         (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
         (mitAnhang ? 'Die Sicherheitstechnische Bedenkenanzeige ist als PDF angehängt.' : 'Die vollständige Sicherheitstechnische Bedenkenanzeige als PDF bitte hier exportieren und anhängen.') +
@@ -5932,7 +6053,7 @@ function schnellmangelMailText(insp, m, mitAnhang) {
     subject: 'Mangel gemeldet: ' + insp.standort + ', ' + fmtDate(insp.datum) + betreffKurz,
     body: (vorname ? 'Hallo ' + vorname + ',' : 'Hallo zusammen,') + '\n\n' +
       'bei meiner Kontrolle am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' ist mir folgender Mangel aufgefallen:\n\n' +
-      (ohneHerkunft(m.beschreibung) || '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
+      (ohneHerkunft(m.beschreibung) || '') + (mangelTueren(m, insp).length ? '\nTüren: ' + tuerenText(mangelTueren(m, insp)) : '') + '\n\nDringlichkeit: ' + m.dringlichkeit +
       (zustaendig && !zustEmpfaenger ? '\nZuständig: ' + zustaendig : '') +
       (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') + '\n\n' +
       (vorname ? 'Kümmerst du dich bitte' : 'Kümmert ihr euch bitte') + (m.frist ? ' bis zum ' + fmtDate(m.frist) : '') + ' darum und ' +
@@ -6181,7 +6302,7 @@ function schnellmangelDokument() {
       '</div>' +
       '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
       '<span class="db ' + dc + '">' + dCap + '</span></div>' +
-      '<div class="mb-b"><div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' + fristHtml +
+      '<div class="mb-b">' + (mangelTueren(m, insp).length ? '<div style="font-size:8pt;color:#717D7E;margin-bottom:3px">Türen: ' + escH(tuerenText(mangelTueren(m, insp))) + '</div>' : '') + '<div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' + fristHtml +
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       fotosEx + '</div></div>' +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung des genannten Mangels und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung des aufgeführten Mangels die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
@@ -6199,7 +6320,7 @@ function schnellmangelDokument() {
       '<div class="meta-box"><div class="meta-lbl">Gemeldet von</div><div class="meta-val" style="font-size:11pt">' + insp.begeher + '</div></div></div>' +
       '<div class="mb"><div class="mb-h"><strong>' + (m.checkName || 'Direktmeldung') + '</strong>' +
       '<span class="db ' + dc + '">' + dCap + '</span></div>' +
-      '<div class="mb-b"><div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' +
+      '<div class="mb-b">' + (mangelTueren(m, insp).length ? '<div style="font-size:8pt;color:#717D7E;margin-bottom:3px">Türen: ' + escH(tuerenText(mangelTueren(m, insp))) + '</div>' : '') + '<div>' + (ohneHerkunft(m.beschreibung) || '') + '</div>' +
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       (m.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(m.frist) + '</div>' : '') +
       fotosEx + '</div></div>';
