@@ -1167,6 +1167,71 @@ function offeneMaengelAlle() {
 
 // Herkunftsvermerk aus dem Mail-Eingang gehört nur in die App, nicht in Mails und PDFs
 function ohneHerkunft(t) { return String(t || '').replace(/\n?\[Aus Mail von [^\]]*\]\s*$/, '').trim(); }
+/* Kurzfassung (05.11.2026): Protokoll-PDF, Bedenkenanzeige und Liste an die Centerleitung zeigen je Mangel
+   Kurztext und Maßnahme. Fehlt der Kurztext: die ersten zwei Sätze der Beschreibung ohne Vermerke [..]
+   und ohne Foto-Zeilen. Der Verlauf bleibt in der Beschreibung und damit nur in der App. */
+function ohneVerlauf(t) {
+  return String(t || '').replace(/\[[^\]]*\]/g, '\n').split('\n')
+    .filter(function(z) { return !/^\s*Fotos?\s*:/i.test(z); }).join(' ').replace(/\s+/g, ' ').trim();
+}
+var KURZ_ABK = /^(z|B|d|h|u|a|s|o|ca|bzw|ggf|evtl|inkl|Nr|vgl|Str|Hr|Fr|max|min|lt|gem|usw|etc|St|Tel|bspw)$/i;
+function ersteSaetze(t, n) {
+  var s = ohneVerlauf(t);
+  var re = /[.!?](?=\s|$)/g, f, ende = -1, zahl = 0;
+  while ((f = re.exec(s))) {
+    var vor = s.slice(0, f.index).split(' ').pop();
+    if (f.index + 1 < s.length && (/^[\d.]+$/.test(vor) || KURZ_ABK.test(vor))) continue;
+    zahl++; ende = f.index + 1;
+    if (zahl >= n) break;
+  }
+  if (zahl >= n) s = s.slice(0, ende);
+  return s.length > 300 ? s.slice(0, 297).replace(/\s+\S*$/, '') + ' …' : s;
+}
+function mangelKurztext(m) { return String((m && m.kurztext) || '').trim() || ersteSaetze(m && m.beschreibung, 2); }
+function mangelMassnahme(m) { return String((m && m.massnahme) || '').trim(); }
+function mangelKurzFelderMerken(m) {
+  if (!m) return;
+  [['d-kurz', 'kurztext'], ['d-massn', 'massnahme']].forEach(function(p) {
+    var el = document.getElementById(p[0]);
+    if (!el) return;
+    var v = el.value.replace(/[<>]/g, '').trim();
+    if (v) m[p[1]] = v; else delete m[p[1]];
+  });
+}
+/* Tabelle der Kurzfassung für das PDF: höchstens ein kleines Foto je Mangel. */
+function kurzTabelleHtml(liste, insp, checks) {
+  var heute = new Date(today());
+  var zeilen = liste.map(function(mg, i) {
+    var dring = mg.dringlichkeit || 'mittel';
+    var dc = dring === 'gering' ? 'dg' : dring === 'mittel' ? 'dm' : 'dc';
+    var ort = [];
+    var stw = ((checks || {})[mg.checkId] || {}).stockwerk || '';
+    if (stw) ort.push('Stockwerk: ' + escH(stw));
+    var tu = tuerenText(mangelTueren(mg, insp));
+    if (tu) ort.push('Türen: ' + escH(tu));
+    var foto = (mg.fotos || []).filter(function(x) { return typeof x === 'string' && x; })[0];
+    var frist = '–';
+    if (mg.frist) {
+      var ueber = !mg.behoben && new Date(mg.frist).getTime() < heute.getTime();
+      frist = ueber ? '<span style="color:#C0392B;font-weight:700">' + fmtDate(mg.frist) + '<br>überfällig</span>' : fmtDate(mg.frist);
+    }
+    var stand = mg.behoben ? '<span style="color:#808B96">Behoben' + (mg.behobDatum ? '<br>' + fmtDate(mg.behobDatum) : '') + '</span>'
+      : 'Offen' + (mg.uebernommen && mg.uebernommenSeit ? '<br><span style="font-size:7pt;color:#717D7E">seit ' + fmtDate(mg.uebernommenSeit) + '</span>' : '');
+    return '<tr class="kf">' +
+      '<td><strong>' + (i + 1) + '. ' + escH(mg.checkName || 'Mangel') + '</strong>' +
+      (ort.length ? '<div class="kf-ort">' + ort.join(' &middot; ') + '</div>' : '') +
+      '<div>' + escH(mangelKurztext(mg)) + '</div>' +
+      (foto ? '<img class="kf-foto" src="' + foto + '">' : '') + '</td>' +
+      '<td><span class="db ' + dc + '">' + dring.charAt(0).toUpperCase() + dring.slice(1) + '</span></td>' +
+      '<td>' + (escH(mg.zustaendig || '').trim() || '–') + '</td>' +
+      '<td>' + (escH(mangelMassnahme(mg)) || '–') + '</td>' +
+      '<td>' + frist + '</td>' +
+      '<td>' + stand + '</td></tr>';
+  }).join('');
+  return '<table class="kf-tab"><thead><tr><th style="width:37%">Mangel</th><th style="width:10%">Dringlichkeit</th>' +
+    '<th style="width:14%">Zuständig</th><th style="width:19%">Maßnahme</th><th style="width:10%">Frist</th><th style="width:10%">Stand</th></tr></thead>' +
+    '<tbody>' + zeilen + '</tbody></table>';
+}
 // Kurzbezeichnung eines Mangels: Prüfpunkt, bei Direktmeldungen die erste Zeile der Beschreibung
 // Stand der Mail zu einem Mangel: Entwurf abgelegt, Mail raus (aus dem Mail-Vorgang), Antwort da
 function mailStandHtml(m) {
@@ -1640,6 +1705,9 @@ function vDefect() {
     '<div class="card">' +
     '<div class="form-group"><label class="form-label">Beschreibung *</label>' +
     '<textarea class="form-textarea" id="d-beschr" placeholder="Was genau ist der Mangel?">' + (m.beschreibung || '') + '</textarea></div>' +
+    '<div class="form-group"><label class="form-label">Kurztext fürs Protokoll (1 bis 2 Sätze, optional)</label>' +
+    '<textarea class="form-textarea" id="d-kurz" rows="2" style="min-height:56px" placeholder="' + escH(ersteSaetze(m.beschreibung, 2) || 'Was ist der Mangel, warum kritisch?') + '">' + escH(m.kurztext || '') + '</textarea>' +
+    '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Steht im PDF-Protokoll und in der Bedenkenanzeige. Leer: die ersten zwei Sätze der Beschreibung ohne Vermerke in [ ]. Der Verlauf bleibt nur in der App.</div></div>' +
     '<div class="form-group"><label class="form-label">Dringlichkeit</label>' +
     '<div class="seg-control">' +
     '<button class="seg-btn' + (m.dringlichkeit === 'gering' ? ' seg-active-ok' : '') + '" data-action="set-dring" data-val="gering">Gering</button>' +
@@ -1648,6 +1716,8 @@ function vDefect() {
     '</div></div>' +
     '<div class="form-group"><label class="form-label">Zuständig (optional)</label>' +
     '<input type="text" class="form-input" id="d-zust" value="' + (m.zustaendig || '') + '" placeholder="Name oder Firma"></div>' +
+    '<div class="form-group"><label class="form-label">Maßnahme (was ist getan, mit Datum, optional)</label>' +
+    '<textarea class="form-textarea" id="d-massn" rows="2" style="min-height:56px" placeholder="z. B. 05.11.: Reparatur beauftragt">' + escH(m.massnahme || '') + '</textarea></div>' +
     '<div class="form-group"><label class="form-label">Wer ist dran?</label>' +
     '<div class="seg-control">' +
     '<button class="seg-btn' + (!m.beiAnderen ? ' seg-active-ok' : '') + '" data-action="set-bei" data-val="mir">Bei mir</button>' +
@@ -1791,7 +1861,7 @@ function vSummary() {
   var clListeText = '';
   for (var mci = 0; mci < maengelOffen.length; mci++) {
     var mc = maengelOffen[mci];
-    clListeText += '- ' + mc.checkName + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + (ohneHerkunft(mc.beschreibung) || '') + '\n\n';
+    clListeText += '- ' + mc.checkName + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + mangelKurztext(mc) + (mangelMassnahme(mc) ? '\n  Maßnahme: ' + mangelMassnahme(mc) : '') + '\n\n';
   }
 
   var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
@@ -2173,7 +2243,7 @@ function vHilfe() {
 
     '<div class="section-header">Abschluss und Export</div>' +
     hSection('📄', 'PDF-Export',
-      'Erzeugt ein vollständiges Begehungsprotokoll mit Prüfliste, Mängelliste und Fotos. Falls eine Bedenkenanzeige vorliegt, wird automatisch ein zweites Blatt mit Fristen und Fotos angehängt. Vor dem Export kann eine digitale Unterschrift hinzugefügt werden.') +
+      'Erzeugt ein kurzes Begehungsprotokoll: Mängelliste als Tabelle (Mangel, Dringlichkeit, Zuständig, Maßnahme, Frist, Stand) mit höchstens einem kleinen Foto je Mangel. Die Prüfliste und der Verlauf (Vermerke in [ ]) bleiben in der App. Falls eine Bedenkenanzeige vorliegt, wird automatisch ein zweites Blatt mit derselben Kurzfassung angehängt. Vor dem Export kann eine digitale Unterschrift hinzugefügt werden.') +
     hSection('✍️', 'Unterschrift',
       'Im Zusammenfassungsbildschirm "Unterschrift hinzufügen" tippen. Mit dem Finger auf dem Bildschirm unterschreiben. Die Unterschrift erscheint im PDF-Export.') +
     hSection('📧', 'E-Mail-Versand',
@@ -5198,6 +5268,8 @@ document.addEventListener('click', function(e) {
         beiAnderen: !!vm.beiAnderen
       });
       if (vmTueren.length) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].tueren = vmTueren.slice();
+      if (vm.kurztext) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].kurztext = vm.kurztext;
+      if (vm.massnahme) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].massnahme = vm.massnahme;
       if (offeneVorher[ov].inspId) S.currentInspection.weiterVon = (S.currentInspection.weiterVon || []).concat([{ inspId: offeneVorher[ov].inspId, mid: vm.id }]);
     }
     S.collapsedCats = fertigeBereiche(S.currentInspection);
@@ -5346,6 +5418,7 @@ document.addEventListener('click', function(e) {
       S.currentInspection.maengel.push(mSave);
     }
     mSave.beschreibung = beschr; mSave.zustaendig = zust; mSave.frist = frist;
+    mangelKurzFelderMerken(mSave);
     delete mSave.fristAuto;
     var bedenkenCb = document.getElementById('d-bedenken');
     mSave.bedenken = bedenkenCb ? bedenkenCb.checked : false;
@@ -5401,6 +5474,7 @@ document.addEventListener('click', function(e) {
     var maengelPh = S.currentInspection.maengel || [];
     for (var mph = 0; mph < maengelPh.length; mph++) {
       if (maengelPh[mph].id === S.currentDefectId) {
+        mangelKurzFelderMerken(maengelPh[mph]);
         maengelPh[mph].fotos.splice(parseInt(a.idx), 1);
         if (maengelPh[mph].fotoTexte) maengelPh[mph].fotoTexte.splice(parseInt(a.idx), 1);
         render(); break;
@@ -5429,6 +5503,7 @@ document.addEventListener('click', function(e) {
     if (apZust) mAp.zustaendig = apZust.value;
     if (apFrist) { mAp.frist = apFrist.value; if (apFrist.dataset.auto) mAp.fristAuto = true; else delete mAp.fristAuto; }
     if (apBedenken) mAp.bedenken = apBedenken.checked;
+    mangelKurzFelderMerken(mAp);
     if (!S.currentInspection.checks[S.currentDefectCheckId]) S.currentInspection.checks[S.currentDefectCheckId] = {};
     S.currentInspection.checks[S.currentDefectCheckId].status = 'mangel';
     S.currentPhotoTarget = { type: 'defect' };
@@ -5760,86 +5835,14 @@ function doExport() {
   var insp = S.currentInspection;
   var c = inspCounts(insp);
   var checks = insp.checks || {};
+  // Offene zuerst, dann nach Dringlichkeit; behobene bleiben im Protokoll (Stand von damals)
   var maengel = (insp.maengel || []).slice().sort(function(a, b) {
     var order = ['kritisch','mittel','gering'];
-    return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
+    return ((a.behoben ? 1 : 0) - (b.behoben ? 1 : 0)) || (order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit));
   });
 
-  var tableRows = '';
-  for (var ci = 0; ci < S.categories.length; ci++) {
-    var cat = S.categories[ci];
-    var rows = '';
-    for (var ii = 0; ii < cat.items.length; ii++) {
-      var item = cat.items[ii];
-      var ch = checks[item.id] || {};
-      var m = null;
-      for (var mi = 0; mi < maengel.length; mi++) {
-        if (maengel[mi].checkId === item.id) { m = maengel[mi]; break; }
-      }
-      var stockwerkTd = '<td>' + (ch.stockwerk || '') + '</td>';
-      var pdfTueren = tuerListe(ch).length ? tuerListe(ch) : (m ? tuerListe(m) : []);
-      var itemTd = '<td>' + item.name + (pdfTueren.length ? '<div style="font-size:7.5pt;color:#717D7E;margin-top:2px">Türen: ' + escH(tuerenText(pdfTueren)) + '</div>' : '') + '</td>';
-      if (!ch.status) {
-        rows += '<tr>' + itemTd + stockwerkTd + '<td class="s-na">–</td><td></td></tr>';
-      } else {
-        var st = ch.status === 'ok' ? 'In Ordnung' : ch.status === 'mangel' ? 'Mangel' : 'N.A.';
-        var sc = ch.status === 'ok' ? 's-ok' : ch.status === 'mangel' ? 's-mn' : 's-na';
-        var bemerkung = ch.notiz || (m ? (ohneHerkunft(m.beschreibung) || '') : '');
-        var checkFotosHtml = '';
-        if (ch.fotos && ch.fotos.length) {
-          checkFotosHtml = '<div class="photos">';
-          for (var cfp = 0; cfp < ch.fotos.length; cfp++) {
-            var cap = fotoStockwerk(ch, cfp).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-            checkFotosHtml += '<figure class="ph"><img src="' + ch.fotos[cfp] + '">' + (cap ? '<figcaption>' + cap + '</figcaption>' : '') + '</figure>';
-          }
-          checkFotosHtml += '</div>';
-        }
-        rows += '<tr' + (checkFotosHtml ? ' class="has-photos"' : '') + '>' + itemTd + stockwerkTd + '<td class="' + sc + '">' + st + '</td><td>' + bemerkung + checkFotosHtml + '</td></tr>';
-      }
-    }
-    tableRows += '<table><thead><tr><th style="width:44%">' + cat.name + '</th><th style="width:12%">Stockwerk</th><th style="width:13%">Status</th><th>Bemerkung</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  }
-
-  var maengelSection = '';
-  if (maengel.length > 0) {
-    maengelSection = '<h2>Mängelliste</h2>';
-    for (var mi2 = 0; mi2 < maengel.length; mi2++) {
-      var mg = maengel[mi2];
-      var mgCat = null;
-      for (var ci2 = 0; ci2 < S.categories.length; ci2++) {
-        for (var ii2 = 0; ii2 < S.categories[ci2].items.length; ii2++) {
-          if (S.categories[ci2].items[ii2].id === mg.checkId) { mgCat = S.categories[ci2]; break; }
-        }
-        if (mgCat) break;
-      }
-      var dc = mg.dringlichkeit === 'gering' ? 'dg' : mg.dringlichkeit === 'mittel' ? 'dm' : 'dc';
-      var fotosEx = '';
-      if (mg.fotos && mg.fotos.length) {
-        fotosEx = '<div class="photos">';
-        for (var fp = 0; fp < mg.fotos.length; fp++) {
-          var mcap = escH(mangelFotoText(mg, fp));
-          fotosEx += mcap ? '<figure class="ph"><img src="' + mg.fotos[fp] + '"><figcaption>' + mcap + '</figcaption></figure>' : '<img src="' + mg.fotos[fp] + '">';
-        }
-        fotosEx += '</div>';
-      }
-      var dringCap = mg.dringlichkeit.charAt(0).toUpperCase() + mg.dringlichkeit.slice(1);
-      var behobHtml = mg.behoben ? '<span class="db" style="background:#F2F3F4;color:#808B96">Behoben ' + (mg.behobDatum ? fmtDate(mg.behobDatum) : '') + '</span>' : '';
-      var mgStockwerk = (checks[mg.checkId] || {}).stockwerk || '';
-      var mgTueren = tuerenText(mangelTueren(mg, insp));
-      if (mgStockwerk) mgStockwerk = 'Stockwerk: ' + mgStockwerk;
-      if (mgTueren) mgStockwerk = (mgStockwerk ? mgStockwerk + ' &middot; ' : '') + 'Türen: ' + escH(mgTueren);
-      maengelSection += '<div class="mb">' +
-        '<div class="mb-h"><strong>' + (mi2+1) + '. ' + mg.checkName + '</strong>' +
-        '<div style="display:flex;gap:4px"><span class="db ' + dc + '">' + dringCap + '</span>' + behobHtml + '</div></div>' +
-        '<div class="mb-b">' +
-        (mgCat ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">Kategorie: ' + mgCat.name + (mgStockwerk ? ' &middot; ' + mgStockwerk : '') + '</div>' : (mgStockwerk ? '<div style="font-size:7.5pt;color:#717D7E;margin-bottom:3px">' + mgStockwerk + '</div>' : '')) +
-        '<div>' + (ohneHerkunft(mg.beschreibung) || '') + '</div>' +
-        (mg.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + mg.zustaendig + '</div>' : '') +
-        (mg.frist ? '<div style="font-size:8pt">Frist: ' + fmtDate(mg.frist) + '</div>' : '') +
-        (mg.uebernommen ? '<div style="font-size:8pt">Bereits seit Begehung vom ' + fmtDate(mg.uebernommenSeit) + ' offen</div>' : '') +
-        fotosEx + '</div></div>';
-    }
-  }
+  var maengelSection = '<h2>Mängelliste</h2>' + (maengel.length ? kurzTabelleHtml(maengel, insp, checks)
+    : '<p style="font-size:9pt">Bei dieser Begehung wurden keine Mängel festgestellt.</p>');
 
   var sigSection = '';
   if (insp.unterschrift) {
@@ -5848,12 +5851,9 @@ function doExport() {
     sigSection = '<div class="sig"><div class="sig-box"><div class="sig-line"></div><div class="sig-lbl">' + insp.begeher + ' &middot; ' + fmtDate(insp.datum) + '</div></div></div>';
   }
 
-  var statsSection = '<h2>Zusammenfassung</h2><div class="stats">' +
-    '<div class="stat"><div class="stat-n n-ok">' + c.ok + '</div><div class="stat-l">In Ordnung</div></div>' +
-    '<div class="stat"><div class="stat-n n-w">' + c.mangel + '</div><div class="stat-l">Mängel</div></div>' +
-    '<div class="stat"><div class="stat-n n-c">' + c.kritischAlle + '</div><div class="stat-l">Kritisch</div></div>' +
-    '<div class="stat"><div class="stat-n n-na">' + c.na + '</div><div class="stat-l">Nicht anwendbar</div></div>' +
-    '</div>';
+  var statsSection = '<div class="kf-stats">Geprüfte Punkte: <strong>' + (c.ok + c.mangel + c.na) + '</strong> &middot; In Ordnung: <strong class="n-ok">' + c.ok + '</strong>' +
+    ' &middot; Mängel: <strong class="n-w">' + c.mangel + '</strong> (davon kritisch: <strong class="n-c">' + c.kritischAlle + '</strong>, offen: <strong>' + c.offen + '</strong>)' +
+    ' &middot; Nicht anwendbar: ' + c.na + '</div>';
 
   // Bedenkenanzeige-Mängel sammeln
   var bedenkenMaengel = [];
@@ -5863,41 +5863,6 @@ function doExport() {
 
   var bedenkenSection = '';
   if (bedenkenMaengel.length > 0) {
-    var bedenkenItems = '';
-    for (var bki = 0; bki < bedenkenMaengel.length; bki++) {
-      var bm = bedenkenMaengel[bki];
-      var dCap = bm.dringlichkeit.charAt(0).toUpperCase() + bm.dringlichkeit.slice(1);
-      var bmFotos = '';
-      if (bm.fotos && bm.fotos.length) {
-        bmFotos = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;page-break-inside:avoid;break-inside:avoid;">';
-        for (var bpf = 0; bpf < bm.fotos.length; bpf++) {
-          var bcap = escH(mangelFotoText(bm, bpf));
-          bmFotos += '<div style="width:110px"><img src="' + bm.fotos[bpf] + '" style="width:110px;height:80px;object-fit:cover;border-radius:4px;border:0.5px solid #D5DBDB;">' +
-            (bcap ? '<div style="font-size:7pt;color:#566573;text-align:center;margin-top:2px">' + bcap + '</div>' : '') + '</div>';
-        }
-        bmFotos += '</div>';
-      }
-      var fristHtml = '';
-      if (bm.frist) {
-        var fristDate = new Date(bm.frist);
-        var todayDate = new Date(today());
-        var fristDays = Math.round((fristDate.getTime() - todayDate.getTime()) / 86400000);
-        var fristColor = fristDays < 0 ? '#C0392B' : fristDays <= 7 ? '#D68910' : '#27AE60';
-        var fristLabel = fristDays < 0
-          ? 'Frist überschritten seit ' + Math.abs(fristDays) + ' Tag(en)'
-          : fristDays === 0 ? 'Frist: heute'
-          : 'Frist: ' + fmtDate(bm.frist) + ' (noch ' + fristDays + ' Tag' + (fristDays !== 1 ? 'e' : '') + ')';
-        fristHtml = '<br><span style="font-size:8.5pt;font-weight:700;color:' + fristColor + '">' + fristLabel + '</span>';
-      }
-      bedenkenItems += '<li style="margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid #EAECEE"><strong>' + bm.checkName + '</strong> ' +
-        (mangelTueren(bm, insp).length ? '<span style="font-size:8.5pt;color:#717D7E">(Türen: ' + escH(tuerenText(mangelTueren(bm, insp))) + ')</span> ' : '') +
-        '<span style="background:#FDEDEC;color:#C0392B;padding:1px 7px;border-radius:10px;font-size:8pt;font-weight:700">' + dCap + '</span>' +
-        (ohneHerkunft(bm.beschreibung) ? '<br><span style="font-size:9pt">' + ohneHerkunft(bm.beschreibung) + '</span>' : '') +
-        fristHtml +
-        (bm.zustaendig ? '<br><span style="font-size:8.5pt;color:#717D7E">Zuständig: ' + bm.zustaendig + '</span>' : '') +
-        bmFotos +
-        '</li>';
-    }
     bedenkenSection = '<hr class="page-break">' +
       '<div class="top"><div><h1 style="color:#C0392B">Sicherheitstechnische Bedenkenanzeige</h1>' +
       '<div class="company">' + S.firmierung + ' &middot; Standort ' + insp.standort + '</div></div>' +
@@ -5914,7 +5879,7 @@ function doExport() {
       '<div class="bedenken-text">Im Rahmen der Brandschutzbegehung vom <strong>' + fmtDate(insp.datum) + '</strong> am Standort <strong>' + insp.standort + '</strong> wurden Mängel festgestellt, die eine unmittelbare Beeinträchtigung der Brandsicherheit darstellen und deren Nichtbehebung zu einer erhöhten Gefährdung von Personen und Sachwerten führen kann.</div>' +
       '</div>' +
       '<h2 style="font-size:11pt;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #D5DBDB">Festgestellte Mängel mit Bedenkenanzeige</h2>' +
-      '<ul style="padding-left:18px;line-height:1.7">' + bedenkenItems + '</ul>' +
+      kurzTabelleHtml(bedenkenMaengel, insp, checks) +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung der genannten Mängel und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung der aufgeführten Mängel die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
       '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
@@ -5969,6 +5934,10 @@ function doExport() {
     '.bedenken-title{font-size:11pt;font-weight:700;color:#C0392B;margin-bottom:6px;}' +
     '.bedenken-text{font-size:9pt;line-height:1.6;}' +
     'hr.page-break{page-break-after:always;border:none;}' +
+    '.kf-tab{font-size:8pt;}.kf-tab td{padding:5px 6px;}.kf-tab tr.kf{page-break-inside:avoid;break-inside:avoid;}' +
+    '.kf-ort{font-size:7pt;color:#717D7E;margin:1px 0 2px;}' +
+    '.kf-foto{display:block;width:72px;height:54px;object-fit:cover;border-radius:3px;border:0.5px solid #D5DBDB;margin-top:4px;}' +
+    '.kf-stats{font-size:8.5pt;background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:6px 10px;margin-bottom:6px;}' +
     '</style></head><body>' +
     '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
     '<table class="pdf-page-table"><tfoot><tr><td><div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner</div></td></tr></tfoot><tbody><tr><td>' +
@@ -5983,7 +5952,7 @@ function doExport() {
     '<div class="meta-box"><div class="meta-lbl">Begeher</div><div class="meta-val">' + insp.begeher + '</div></div>' +
     (insp.anwesende ? '<div class="meta-box" style="grid-column:1/-1"><div class="meta-lbl">Anwesende Personen</div><div class="meta-val" style="font-size:10pt">' + insp.anwesende + '</div></div>' : '') +
     '</div>' +
-    '<h2>Prüfliste</h2>' + tableRows + maengelSection + statsSection + sigSection + bedenkenSection +
+    statsSection + maengelSection + sigSection + bedenkenSection +
     '</td></tr></tbody></table>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
     '</body></html>';
@@ -5998,7 +5967,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-04b';
+var APP_STAND = '2026-11-05a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
