@@ -1511,7 +1511,7 @@ function mangelAnstossMail(it) {
   var st = mangelLetzterStand(m);
   var body = 'Hallo,\n\nich frage kurz nach dem Stand zu diesem Punkt in ' + it.insp.standort + ':\n\n' + mangelTitel(m) +
     (st ? '\nLetzter Stand: ' + st : '') + (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
-    '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '');
+    '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   return { an: an, subject: 'Stand: ' + mangelTitel(m).slice(0, 90) + ' (' + it.insp.standort + ')', body: body };
 }
 
@@ -5360,9 +5360,30 @@ document.addEventListener('click', function(e) {
     if (!ma) return;
     var am = mangelAnstossMail(ma);
     if (!am.an && !confirm('Für diesen Mangel ist keine E-Mail-Adresse gefunden (Zuständiger oder Centerleitung). Mail trotzdem öffnen und den Empfänger selbst eintragen?')) return;
-    ma.mangel.status = 'wartet'; ma.mangel.bewegtAm = today();
-    if (!ma.mangel.nachfassAm || ma.mangel.nachfassAm <= today()) ma.mangel.nachfassAm = tagePlus(3);
-    save(); render();
+    var neuNachfass = (!ma.mangel.nachfassAm || ma.mangel.nachfassAm <= today()) ? tagePlus(3) : ma.mangel.nachfassAm;
+    var gemerkt = function() {
+      ma.mangel.status = 'wartet'; ma.mangel.bewegtAm = today(); ma.mangel.nachfassAm = neuNachfass;
+      save(); render();
+    };
+    if (srvConfigured()) {  // mangel-anstossen-entwurf: Entwurf im Brandschutz-Gmail, Thomas prüft und sendet dort
+      fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ an: am.an, betreff: am.subject, text: am.body, ohnePdf: true, frist: neuNachfass, anrede: '', form: 'du', zusatz: 'Nachfrage zu einem Mangel' })
+      }).then(function(r) {
+        return r.json().catch(function() { return {}; }).then(function(res) {
+          if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
+          gemerkt();
+          alert('Der Entwurf liegt in etwa einer Minute im Brandschutz-Gmail unter Entwürfe. Dort prüfen und senden.' + (am.an ? '' : '\n\nEmpfänger fehlt noch, bitte dort eintragen.'));
+        });
+      }).catch(function(e) {
+        if (confirm('Kein Entwurf abgelegt: ' + (e && e.message ? e.message : e) + '\n\nStattdessen die Mail-App öffnen?')) {
+          gemerkt();
+          window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body);
+        }
+      });
+      return;
+    }
+    gemerkt();
     window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body);
     return;
   }
@@ -6125,7 +6146,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05g';
+var APP_STAND = '2026-11-05h';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
