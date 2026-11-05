@@ -184,7 +184,13 @@
     .mangel-card-item { font-size: 13px; font-weight: 600; padding: 0 14px 4px; }
     .mangel-card-desc { font-size: 13px; color: var(--text); padding: 0 14px 4px; line-height: 1.5; }
     .mangel-card-frist { font-size: 12px; color: var(--text-light); padding: 0 14px 4px; }
-    .mangel-card-actions { padding: 4px 14px 10px; display: flex; gap: 8px; }
+    .mangel-card-actions { padding: 4px 14px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .mg-status { display: flex; gap: 4px; padding: 2px 14px 6px; flex-wrap: wrap; }
+    .mg-st { font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-light); cursor: pointer; font-family: inherit; }
+    .mg-st-an { background: var(--warn-bg); border-color: var(--warn-border); color: var(--text); }
+    .mg-verlauf { padding: 0 14px 4px; font-size: 12px; color: var(--text-light); }
+    .mg-verlauf summary { cursor: pointer; }
+    .mg-verlauf div { padding: 2px 0 2px 8px; border-left: 2px solid var(--border); margin-top: 3px; }
     .photo-preview-row { display: flex; gap: 6px; padding: 4px 14px 12px; flex-wrap: wrap; }
     .photo-preview-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 0.5px solid var(--border); }
     .photo-preview-cell { width: 64px; }
@@ -1459,6 +1465,49 @@ function vStandort() {
 }
 
 /* ── OFFENE MÄNGEL GLOBAL ── nach Standort gruppiert, mit Filtern */
+var MG_STATI = [['neu', 'Neu'], ['beauftragt', 'Beauftragt'], ['inarbeit', 'In Arbeit'], ['wartet', 'Wartet auf Antwort']];
+function mangelStatus(m) { return m && m.status ? m.status : 'neu'; }
+function mangelVermerke(m) {
+  var r = [], re = /\[([^\]]*)\]/g, f;
+  while ((f = re.exec(String((m && m.beschreibung) || '')))) { if (!/^\s*Fotos?\s*:/i.test(f[1])) r.push(f[1].trim()); }
+  return r;
+}
+function mangelLetzterStand(m) {
+  var v = mangelVermerke(m);
+  return String(m.massnahme || '').trim() || v[v.length - 1] || '';
+}
+function mangelBewegtTage(it) {
+  var d = it.mangel.bewegtAm || it.insp.datum;
+  // jüngstes Datum aus Maßnahme und Vermerken ([02.11.2026: …]) zählt auch als Bewegung
+  (String(it.mangel.massnahme || '') + ' ' + mangelVermerke(it.mangel).join(' ')).replace(/(\d{1,2})\.(\d{1,2})\.(\d{4})/g, function(x, t, mo, j) {
+    var iso = j + '-' + ('0' + mo).slice(-2) + '-' + ('0' + t).slice(-2);
+    if (iso > d && iso <= today()) d = iso;
+    return x;
+  });
+  return d ? Math.max(0, daysBetween(d, today())) : 0;
+}
+function tagePlus(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
+function mangelSuchen(inspid, mid) {
+  for (var i = 0; i < S.inspections.length; i++) {
+    if (S.inspections[i].id !== inspid) continue;
+    var ml = S.inspections[i].maengel || [];
+    for (var j = 0; j < ml.length; j++) { if (ml[j].id === mid) return { insp: S.inspections[i], mangel: ml[j] }; }
+  }
+  return null;
+}
+function mangelAnstossMail(it) {
+  var m = it.mangel, an = '', z = String(m.zustaendig || '').toLowerCase().trim(), tr = [];
+  // Nur eindeutige Treffer; "Thomas"/"Hübi"/Haustechnik sind Thomas selbst und passen nicht zu einem Kontakt gleichen Vornamens
+  if (z.length >= 4 && !/^(thomas|hübi|haustechnik)/.test(z)) (S.kontakte || []).forEach(function(k) { if (k.email && k.name && String(k.name).toLowerCase().indexOf(z) >= 0) tr.push(k.email); });
+  if (tr.length === 1) an = tr[0];
+  if (!an) an = centerleiterEmailFor(it.insp.standort);
+  var st = mangelLetzterStand(m);
+  var body = 'Hallo,\n\nich frage kurz nach dem Stand zu diesem Punkt in ' + it.insp.standort + ':\n\n' + mangelTitel(m) +
+    (st ? '\nLetzter Stand: ' + st : '') + (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
+    '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '');
+  return { an: an, subject: 'Stand: ' + mangelTitel(m).slice(0, 90) + ' (' + it.insp.standort + ')', body: body };
+}
+
 function mangelKarteHtml(it, mitStandort) {
   var m = it.mangel, ue = tageUeberfaellig(m);
   return '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
@@ -1466,14 +1515,26 @@ function mangelKarteHtml(it, mitStandort) {
     (it.insp.schnellmeldung ? ' · Direktmeldung' : ' · Begehung') + '</span>' +
     '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div>' +
     '<div class="mangel-card-item">' + escH(mangelKurz(m)) + '</div>' +
-    (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 ? '<div class="mangel-card-desc">' + (m.beschreibung || '') + '</div>' : '') +
+    (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 && ohneVerlauf(m.beschreibung) ? '<div class="mangel-card-desc">' + escH(ohneVerlauf(m.beschreibung)) + '</div>' : '') +
+    '<div class="mg-status">' + MG_STATI.map(function(s) {
+      return '<button class="mg-st' + (mangelStatus(m) === s[0] ? ' mg-st-an' : '') + '" data-action="mangel-status" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '" data-val="' + s[0] + '">' + s[1] + '</button>';
+    }).join('') + '</div>' +
+    (mangelLetzterStand(m) ? '<div class="mangel-card-frist"><b>Letzter Stand:</b> ' + escH(mangelLetzterStand(m)) + '</div>' : '') +
     (mangelTueren(m, it.insp).length ? '<div class="mangel-card-frist">Türen: ' + escH(tuerenText(mangelTueren(m, it.insp))) + '</div>' : '') +
     (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
-    (m.zustaendig ? '<div class="mangel-card-frist">Zuständig: ' + m.zustaendig + '</div>' : '') +
+    '<div class="mangel-card-frist"' + (m.zustaendig ? '' : ' style="color:var(--warn, #b9770e);font-weight:700"') + '>Zuständig: ' + (m.zustaendig ? escH(m.zustaendig) : 'noch niemand eingetragen (gilt: ' + ZUST_STANDARD + ')') + '</div>' +
+    (mangelBewegtTage(it) >= 3 ? '<div class="mangel-card-frist">Seit ' + mangelBewegtTage(it) + ' Tagen keine Bewegung</div>' : '') +
+    (m.nachfassAm ? '<div class="mangel-card-frist"' + (m.nachfassAm <= today() ? ' style="color:var(--crit);font-weight:700"' : '') + '>Nachfassen: ' + fmtDate(m.nachfassAm) + (m.nachfassAm <= today() ? ' · jetzt dran' : '') + '</div>' : '') +
+    (mangelVermerke(m).length ? '<details class="mg-verlauf"><summary>Verlauf (' + mangelVermerke(m).length + ')</summary>' + mangelVermerke(m).map(function(v) { return '<div>' + escH(v) + '</div>'; }).join('') + '</details>' : '') +
     (beiAnderen(m) ? '<div class="mangel-card-frist" style="font-weight:700">Liegt bei anderen</div>' : '') +
     mailStandHtml(m) +
     '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
-    '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div></div>';
+    '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div>' +
+    '<div class="mangel-card-actions" style="padding-top:0">' +
+    ['zuweisen|Zuweisen', 'anstossen|Anstoßen', 'nachfassen|Nachfassen'].map(function(x) {
+      x = x.split('|');
+      return '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-' + x[0] + '" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + x[1] + '</button>';
+    }).join('') + '</div></div>';
 }
 
 function mangelSortierung(a, b) {
@@ -5240,6 +5301,46 @@ document.addEventListener('click', function(e) {
     save(); render(); return;
   }
 
+  if (a.action === 'mangel-status') {
+    var ms = mangelSuchen(a.inspid, a.mid);
+    if (ms) { ms.mangel.status = a.val; ms.mangel.bewegtAm = today(); save(); render(); }
+    return;
+  }
+  if (a.action === 'mangel-zuweisen') {
+    var mz = mangelSuchen(a.inspid, a.mid);
+    if (!mz) return;
+    var namen = (S.kontakte || []).filter(function(k) { return k.standort === mz.insp.standort && k.name; }).map(function(k) { return k.name; });
+    var eing = prompt('Wer ist zuständig?' + (namen.length ? '\n\nKontakte hier: ' + namen.join(', ') : '') + '\n\nLeer lassen = ' + ZUST_STANDARD, mz.mangel.zustaendig || '');
+    if (eing === null) return;
+    mz.mangel.zustaendig = eing.replace(/[<>]/g, '').trim();
+    mz.mangel.bewegtAm = today();
+    if (mz.mangel.zustaendig && mangelStatus(mz.mangel) === 'neu') mz.mangel.status = 'beauftragt';
+    save(); render();
+    return;
+  }
+  if (a.action === 'mangel-nachfassen') {
+    var mn = mangelSuchen(a.inspid, a.mid);
+    if (!mn) return;
+    var tg = prompt('In wie vielen Tagen nachfassen? (0 = Erinnerung löschen)', '3');
+    if (tg === null) return;
+    tg = parseInt(tg, 10);
+    if (isNaN(tg) || tg < 0 || tg > 365) { alert('Bitte eine Zahl zwischen 0 und 365 eintragen.'); return; }
+    mn.mangel.nachfassAm = tg ? tagePlus(tg) : '';
+    save(); render();
+    return;
+  }
+  if (a.action === 'mangel-anstossen') {
+    var ma = mangelSuchen(a.inspid, a.mid);
+    if (!ma) return;
+    var am = mangelAnstossMail(ma);
+    if (!am.an && !confirm('Für diesen Mangel ist keine E-Mail-Adresse gefunden (Zuständiger oder Centerleitung). Mail trotzdem öffnen und den Empfänger selbst eintragen?')) return;
+    ma.mangel.status = 'wartet'; ma.mangel.bewegtAm = today();
+    if (!ma.mangel.nachfassAm || ma.mangel.nachfassAm <= today()) ma.mangel.nachfassAm = tagePlus(3);
+    save(); render();
+    window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body);
+    return;
+  }
+
   if (a.action === 'mark-behoben') {
     for (var ii = 0; ii < S.inspections.length; ii++) {
       if (S.inspections[ii].id === a.inspid) {
@@ -5278,6 +5379,9 @@ document.addEventListener('click', function(e) {
         uebernommen: true, uebernommenSeit: vm.uebernommenSeit || offeneVorher[ov].datum,
         beiAnderen: !!vm.beiAnderen
       });
+      if (vm.status) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].status = vm.status;
+      if (vm.bewegtAm) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].bewegtAm = vm.bewegtAm;
+      if (vm.nachfassAm) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].nachfassAm = vm.nachfassAm;
       if (vmTueren.length) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].tueren = vmTueren.slice();
       if (vm.kurztext) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].kurztext = vm.kurztext;
       if (vm.massnahme) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].massnahme = vm.massnahme;
@@ -5995,7 +6099,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05e';
+var APP_STAND = '2026-11-05f';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
