@@ -1520,20 +1520,90 @@ function mangelFotosFuerMail(m) {
     });
   })).then(function(l) { return l.filter(Boolean); });
 }
+function datumLokal(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+// n Arbeitstage weiter; fällt es auf Fr, Sa oder So, dann der folgende Montag (Thomas arbeitet Mo bis Do)
+function arbeitstagePlus(n) {
+  var d = new Date(), c = 0;
+  while (c < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) c++; }
+  while (d.getDay() === 5 || d.getDay() === 6 || d.getDay() === 0) d.setDate(d.getDate() + 1);
+  return datumLokal(d);
+}
+function wochentagText(iso) {
+  return ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][new Date(iso + 'T12:00:00').getDay()] + ', ' + fmtDate(iso).slice(0, 6);
+}
+function vornameVon(n) { return String(n || '').trim().split(/\s+/)[0]; }
+function haustechnikerFuer(standort) {
+  var r = null;
+  (S.kontakte || []).forEach(function(k) { if (!r && k.standort === standort && /^haustechniker/i.test(String(k.rolle || '').trim()) && k.name) r = k; });
+  return r;
+}
+function istThomasSelbst(n) { return /^(thomas|hübi)\b/i.test(String(n || '').trim()); }
+function mangelGesendet(m) {
+  var v = null;
+  if (m && m.anstossErst) (S.vorgaenge || []).forEach(function(x) { if (x && x.betreff === m.anstossErst) v = x; });
+  return v;
+}
+// Wer ist zuständig? 'A' Haustechnik (Centerleitung leitet weiter), 'B' jemand anderes (direkt anschreiben)
+function mangelFallPruefen(it) {
+  var m = it.mangel, z = String(m.zustaendig || '').trim(), zl = z.toLowerCase();
+  var ht = haustechnikerFuer(it.insp.standort);
+  var intern = !z || /^haustechnik/i.test(z) || istThomasSelbst(z);
+  (S.kontakte || []).forEach(function(k) {
+    if (/^haustechniker/i.test(String(k.rolle || '').trim()) && k.name && zl && zl.indexOf(vornameVon(k.name).toLowerCase()) === 0) intern = true;
+  });
+  var extern = null;
+  if (!intern) {
+    var tr = (S.kontakte || []).filter(function(k) { return k.email && k.name && zl.length >= 4 && String(k.name).toLowerCase().indexOf(zl) >= 0; });
+    var tr2 = tr.filter(function(k) { return k.standort === it.insp.standort; });
+    extern = tr2.length === 1 ? tr2[0] : (tr.length === 1 ? tr[0] : null);
+  }
+  return { fall: intern ? 'A' : 'B', ht: ht, extern: extern, zust: z };
+}
 function mangelAnstossMail(it, nFotos) {
-  var m = it.mangel, an = '', z = String(m.zustaendig || '').toLowerCase().trim(), tr = [];
-  // Nur eindeutige Treffer; "Thomas"/"Hübi"/Haustechnik sind Thomas selbst und passen nicht zu einem Kontakt gleichen Vornamens
-  if (z.length >= 4 && !/^(thomas|hübi|haustechnik)/.test(z)) (S.kontakte || []).forEach(function(k) { if (k.email && k.name && String(k.name).toLowerCase().indexOf(z) >= 0) tr.push(k.email); });
-  if (tr.length === 1) an = tr[0];
-  if (!an) an = centerleiterEmailFor(it.insp.standort);
+  var m = it.mangel, f = mangelFallPruefen(it), cl = centerleiterKontaktFor(it.insp.standort);
+  var nachfrage = !!mangelGesendet(m), vorg = mangelGesendet(m);
+  var titel = mangelTitel(m), kurz = titel.length > 80 ? titel.slice(0, 80).replace(/\s+\S*$/, '') + ' …' : titel;
+  var standort = it.insp.standort, htName = f.ht ? vornameVon(f.ht.name) : '';
+  var htSelbst = f.ht && istThomasSelbst(f.ht.name);
+  var an = '', cc = '', du = true;
+  if (f.fall === 'B' && f.extern) { an = f.extern.email; du = /@bodyandsoul\.de$/i.test(an); }
+  else an = cl ? cl.email : '';
+  if (f.fall === 'A' && f.ht && f.ht.email && !htSelbst) cc = f.ht.email;
   var orte = [];
   (m.fotoTexte || []).forEach(function(t) { t = String(t || '').trim(); if (t && orte.indexOf(t) < 0) orte.push(t); });
   var ortText = orte.join(', '), tuerText = tuerenText(mangelTueren(m, it.insp));
-  var body = 'Hallo,\n\nich frage kurz nach dem Stand zu diesem Punkt in ' + it.insp.standort + ':\n\n' + mangelTitel(m) +
-    (ortText ? '\nOrt: ' + ortText : '') + (tuerText ? '\nTüren: ' + tuerText : '') +
-    (nFotos ? '\n' + (nFotos === 1 ? 'Ein Foto hängt an.' : 'Die Fotos hängen an.') : '') +
-    '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
-  return { an: an, subject: 'Stand: ' + (mangelTitel(m).length > 80 ? mangelTitel(m).slice(0, 80).replace(/\s+\S*$/, '') + ' …' : mangelTitel(m)) + ' (' + it.insp.standort + ')', body: body };
+  var angaben = titel + (ortText ? '\nOrt: ' + ortText : '') + (tuerText ? '\nTüren: ' + tuerText : '') +
+    (nFotos ? '\n' + (nFotos === 1 ? 'Ein Foto hängt an.' : 'Die Fotos hängen an.') : '');
+  var nachfass = arbeitstagePlus(2);
+  var frist = m.frist ? fmtDate(m.frist) : '';
+  var anlass = it.insp.schnellmeldung ? 'bei meinem Rundgang am ' : 'bei meiner Begehung am ';
+  var hinweis = String(m.hinweisCL || '').replace(/\s+/g, ' ').trim();
+  var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
+  var kein = '', body, subject;
+  if (nachfrage) {
+    var wann = vorg && vorg.gesendet ? fmtDate(vorg.gesendet) : 'neulich';
+    subject = 'Stand: ' + kurz + ' (' + standort + ')';
+    if (f.fall === 'A' && htSelbst) kein = 'Der Haustechniker bei diesem Mangel bist du selbst. Eine Nachfrage an die Centerleitung ist hier nicht nötig. Die Erinnerung bleibt als Nachfassen auf der Karte stehen.';
+    body = (du ? 'Hallo,' : 'Guten Tag,') + '\n\nich ' + (du ? 'hatte dir' : 'hatte Ihnen') + ' am ' + wann + ' zu folgendem Mangel in ' + standort + ' geschrieben:\n\n' + angaben +
+      '\n\n' + (f.fall === 'A' ? 'Wie ist der Stand' + (htName ? ', ist ' + htName + ' schon dran' : '') + ', und bis wann wird es erledigt?'
+                : 'Wie ist der Stand, und bis wann wird es erledigt?') + gruss;
+  } else {
+    subject = 'Mangel in ' + standort + ': ' + kurz;
+    if (f.fall === 'A' && htSelbst) {
+      body = 'Hallo,\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
+        '\n\nIch kümmere mich selbst darum' + (frist ? ', geplant bis ' + frist : '') + '. Du musst nichts veranlassen.' + (hinweis ? '\n\nBitte beachten: ' + hinweis : '') + gruss;
+    } else if (f.fall === 'A') {
+      body = 'Hallo,\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
+        '\n\nBitte gib das an euren Haustechniker' + (htName ? ' ' + htName : '') + ' weiter' + (cc ? ' (er steht in Kopie)' : '') + '. Er soll es ' + (frist ? 'bis ' + frist + ' ' : '') +
+        'erledigen. Gib mir bitte bis ' + wochentagText(nachfass) + ' kurz Rückmeldung, wer es macht und bis wann es erledigt wird.' + (hinweis ? '\n\nBitte beachten: ' + hinweis : '') + gruss;
+    } else {
+      body = (du ? 'Hallo,' : 'Guten Tag,') + '\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
+        '\n\n' + (du ? 'Bitte erledige ihn' : 'Bitte erledigen Sie ihn') + (frist ? ' bis ' + frist : '') + ' und ' + (du ? 'gib mir' : 'geben Sie mir') + ' bis ' + wochentagText(nachfass) +
+        ' kurz Rückmeldung, wie ' + (du ? 'du' : 'Sie') + ' vorgehen.' + gruss;
+    }
+  }
+  return { an: an, cc: cc, subject: subject, body: body, nachfass: nachfass, art: nachfrage ? 'nachfrage' : 'erst', fall: f.fall,
+           form: du ? 'du' : 'sie', kein: kein, externFehlt: f.fall === 'B' && !f.extern, zust: f.zust };
 }
 
 function mangelKarteHtml(it, mitStandort) {
@@ -1559,7 +1629,7 @@ function mangelKarteHtml(it, mitStandort) {
     '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
     '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div>' +
     '<div class="mangel-card-actions" style="padding-top:0">' +
-    ['oeffnen|Öffnen', 'zuweisen|Zuweisen', 'anstossen|Anstoßen', 'nachfassen|Nachfassen'].map(function(x) {
+    ['oeffnen|Öffnen', 'zuweisen|Zuweisen', 'anstossen|' + (mangelGesendet(m) ? 'Nachfragen' : 'Melden'), 'nachfassen|Nachfassen'].map(function(x) {
       x = x.split('|');
       return '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-' + x[0] + '" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + x[1] + '</button>';
     }).join('') + '</div></div>';
@@ -5387,19 +5457,27 @@ document.addEventListener('click', function(e) {
   if (a.action === 'mangel-anstossen') {
     var ma = mangelSuchen(a.inspid, a.mid);
     if (!ma) return;
-    var am = mangelAnstossMail(ma);
+    var mk = ma.mangel;
+    var am = mangelAnstossMail(ma, 0);
+    if (am.kein) { alert(am.kein); return; }
+    if (am.art === 'erst' && mk.anstossErst && srvConfigured() &&
+        !confirm('Zu diesem Mangel liegt schon ein Entwurf (abgelegt am ' + fmtDate(String(mk.mailEntwurfAm || '').slice(0, 10)) + ', noch nicht gesendet). Trotzdem noch einmal ablegen?')) return;
+    if (am.externFehlt && !confirm('„' + am.zust + '“ ist nicht als Kontakt mit E-Mail-Adresse hinterlegt. Die Mail geht stattdessen an die Centerleitung. Trotzdem weiter?')) return;
     if (!am.an && !confirm('Für diesen Mangel ist keine E-Mail-Adresse gefunden (Zuständiger oder Centerleitung). Mail trotzdem öffnen und den Empfänger selbst eintragen?')) return;
-    var neuNachfass = (!ma.mangel.nachfassAm || ma.mangel.nachfassAm <= today()) ? tagePlus(3) : ma.mangel.nachfassAm;
     var gemerkt = function() {
-      ma.mangel.status = 'wartet'; ma.mangel.bewegtAm = today(); ma.mangel.nachfassAm = neuNachfass;
+      mk.status = am.art === 'erst' ? 'beauftragt' : 'wartet'; mk.bewegtAm = today(); mk.nachfassAm = am.nachfass;
+      mk.mailBetreff = am.subject; mk.mailEntwurfAm = new Date().toISOString();
+      if (am.art === 'erst') mk.anstossErst = am.subject;
       save(); render();
     };
-    if (srvConfigured()) {  // mangel-anstossen-entwurf: Entwurf im Brandschutz-Gmail, Thomas prüft und sendet dort
-      mangelFotosFuerMail(ma.mangel).then(function(bilder) {
+    if (srvConfigured()) {  // Entwurf im Brandschutz-Gmail, Thomas prüft und sendet dort
+      mangelFotosFuerMail(mk).then(function(bilder) {
         var am2 = mangelAnstossMail(ma, bilder.length);
+        am.subject = am2.subject; am.body = am2.body;
         return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
           method: 'POST', headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ an: am2.an, betreff: am2.subject, text: am2.body, ohnePdf: true, bilder: bilder, frist: neuNachfass, anrede: '', form: 'du', zusatz: 'Nachfrage zu einem Mangel' })
+          body: JSON.stringify({ an: am2.an, cc: am2.cc, betreff: am2.subject, text: am2.body, ohnePdf: true, bilder: bilder, frist: am2.nachfass, anrede: '', form: am2.form,
+            zusatz: am2.art === 'erst' ? 'Mangel gemeldet' : 'Nachfrage zu einem Mangel' })
         });
       }).then(function(r) {
         return r.json().catch(function() { return {}; }).then(function(res) {
@@ -5410,13 +5488,13 @@ document.addEventListener('click', function(e) {
       }).catch(function(e) {
         if (confirm('Kein Entwurf abgelegt: ' + (e && e.message ? e.message : e) + '\n\nStattdessen die Mail-App öffnen?')) {
           gemerkt();
-          window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body);
+          window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body) + (am.cc ? '&cc=' + encodeURIComponent(am.cc + ',technik@bodyandsoul.de') : '&cc=technik@bodyandsoul.de');
         }
       });
       return;
     }
     gemerkt();
-    window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body);
+    window.location.href = 'mailto:' + am.an + '?subject=' + encodeURIComponent(am.subject) + '&body=' + encodeURIComponent(am.body) + (am.cc ? '&cc=' + encodeURIComponent(am.cc + ',technik@bodyandsoul.de') : '&cc=technik@bodyandsoul.de');
     return;
   }
 
@@ -6180,7 +6258,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05l';
+var APP_STAND = '2026-11-05m';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
