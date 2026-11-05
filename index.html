@@ -1357,6 +1357,13 @@ function heuteZuTunListe() {
     sub: 'Angaben prüfen und speichern', rechts: 'prüfen', action: 'go-belege' });
   var alle = offeneMaengelAlle();
   LOCATIONS.forEach(function(loc) {
+    var nf = alle.filter(function(it) { return it.insp.standort === loc && it.mangel.nachfassAm && it.mangel.nachfassAm <= today(); });
+    if (!nf.length) return;
+    items.push({ prio: nf.some(function(it) { return it.mangel.dringlichkeit === 'kritisch'; }) ? 1 : 2, tage: 0, icon: 'mangel', ton: 'warn', titel: loc,
+      sub: nf.length === 1 ? 'Nachfassen: ' + mangelKurz(nf[0].mangel) : nf.length + ' Mängel zum Nachfassen',
+      rechts: 'nachfassen', action: 'go-standort', loc: loc });
+  });
+  LOCATIONS.forEach(function(loc) {
     var ue = alle.filter(function(it) { return it.insp.standort === loc && tageUeberfaellig(it.mangel) > 0; });
     if (!ue.length) return;
     var krit = ue.filter(function(it) { return it.mangel.dringlichkeit === 'kritisch'; }).length;
@@ -1542,6 +1549,15 @@ function mangelSortierung(a, b) {
   return tageUeberfaellig(b.mangel) - tageUeberfaellig(a.mangel) || o.indexOf(a.mangel.dringlichkeit) - o.indexOf(b.mangel.dringlichkeit);
 }
 
+function mangelGruppe(it) {
+  var m = it.mangel;
+  if (m.nachfassAm && m.nachfassAm <= today()) return 0;
+  if (tageUeberfaellig(m) > 0 && !beiAnderen(m)) return 1;
+  if (beiAnderen(m) || mangelStatus(m) === 'wartet') return 3;
+  return 2;
+}
+var MG_GRUPPEN = ['Jetzt nachfassen', 'Überfällig bei mir', 'Bei mir', 'Warte auf andere'];
+
 function vMaengelGlobal() {
   var alle = offeneMaengelAlle();
   var filter = S.mgFilter || 'alle';
@@ -1565,7 +1581,13 @@ function vMaengelGlobal() {
 
   var html = '';
   if (!items.length) html = '<div class="card empty-state">Keine offenen Mängel für diese Auswahl.</div>';
-  else {
+  else if (S.mgGruppe === 'wer') {
+    html = MG_GRUPPEN.map(function(titel, gi) {
+      var liste = items.filter(function(it) { return mangelGruppe(it) === gi; }).sort(mangelSortierung);
+      if (!liste.length) return '';
+      return '<div class="section-header">' + titel + ' · ' + liste.length + '</div>' + liste.map(function(it) { return mangelKarteHtml(it, true); }).join('');
+    }).join('');
+  } else {
     // Standorte mit den dringendsten Mängeln zuerst
     var gruppen = LOCATIONS.map(function(l) {
       return { loc: l, liste: items.filter(function(it) { return it.insp.standort === l; }).sort(mangelSortierung) };
@@ -1583,6 +1605,9 @@ function vMaengelGlobal() {
     '<div class="header-sub">' + items.length + (items.length === alle.length ? ' gesamt' : ' von ' + alle.length) + '</div></div>' +
     '</div>' +
     '<div style="padding:10px 12px;background:var(--card);border-bottom:0.5px solid var(--border)">' +
+    '<div style="display:flex;gap:6px;margin-bottom:8px">' + [['standort', 'Nach Standort'], ['wer', 'Nach Dran']].map(function(f) {
+      return '<button class="filter-btn' + ((S.mgGruppe || 'standort') === f[0] ? ' filter-btn-active' : '') + '" data-action="mg-gruppe" data-filter="' + f[0] + '">' + f[1] + '</button>';
+    }).join('') + '</div>' +
     '<select class="form-select" id="mg-standort-sel" style="margin-bottom:8px">' + ortOpts + '</select>' +
     '<div style="display:flex;gap:6px">' + filterHtml + '</div>' +
     '<div style="display:flex;gap:6px;margin-top:6px">' + [['alle', 'Alle'], ['mir', 'Bei mir'], ['andere', 'Bei anderen']].map(function(f) {
@@ -4955,6 +4980,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'go-mehr') { nav('mehr'); return; }
   if (a.action === 'settings-tab') { S.settingsTab = a.tab; render(); return; }
   if (a.action === 'mg-filter') { S.mgFilter = a.filter; render(); return; }
+  if (a.action === 'mg-gruppe') { S.mgGruppe = a.filter; render(); return; }
   if (a.action === 'mg-bei') { S.mgBei = a.filter; render(); return; }
   if (a.action === 'go-maengel-global') { nav('maengel-global'); return; }
   if (a.action === 'go-qr') { nav('qr-codes'); return; }
@@ -6099,7 +6125,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05f';
+var APP_STAND = '2026-11-05g';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
