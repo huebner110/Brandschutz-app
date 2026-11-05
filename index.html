@@ -1857,35 +1857,19 @@ function vSummary() {
       '</div>';
   }
 
-  var maengelOffen = maengel.filter(function(m) { return !m.behoben; });
-  var clListeText = '';
-  for (var mci = 0; mci < maengelOffen.length; mci++) {
-    var mc = maengelOffen[mci];
-    clListeText += '- ' + mc.checkName + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') + ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' + mangelKurztext(mc) + (mangelMassnahme(mc) ? '\n  Maßnahme: ' + mangelMassnahme(mc) : '') + '\n\n';
-  }
-
-  var subjectGF = encodeURIComponent('Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum));
-  var gfVorname = (S.gfName || '').trim().split(' ')[0];
-  var bodyGF = encodeURIComponent('Hallo' + (gfVorname ? ' ' + gfVorname : '') + ',\n\nich habe gerade die Begehung am Standort ' + insp.standort + ' abgeschlossen und wollte dir kurz Bescheid geben.\n\nAm ' + fmtDate(insp.datum) + ' wurden insgesamt ' + c.offen + ' Mängel festgestellt, die noch offen sind, davon ' + c.kritisch + ' als kritisch eingestuft. Die Mängel habe ich bereits an die Centerleitung geschickt, damit die Behebung in die Wege geleitet wird.\n\nDas vollständige Protokoll mit allen Details findest du im Anhang als PDF (bitte hier noch manuell anhängen).\n\nMeld dich gerne, falls du dazu Fragen hast.\n\nViele Grüße' + (S.signatur ? '\n\n' + S.signatur : ''));
-  var gfCcListe = (S.gfCc || '').replace(/[;\s]+/g, ',').replace(/^,+|,+$/g, '');
-  var mailtoHrefGF = 'mailto:' + (S.gfEmail || '') + '?' + (gfCcListe ? 'cc=' + encodeURIComponent(gfCcListe) + '&' : '') + 'subject=' + subjectGF + '&body=' + bodyGF;
+  var mtGF = protokollMailText(insp, 'gl', false), mtCL = protokollMailText(insp, 'cl', false);
+  var gfCcListe = mtGF.cc, centerleiterMailSum = mtCL.an;
+  var mailtoHrefGF = protokollMailto(mtGF), mailtoHrefCL = protokollMailto(mtCL);
   var gfRecipientHint = S.gfEmail
-    ? 'Empfänger: ' + S.gfEmail + (gfCcListe ? ' (Kopie: ' + gfCcListe.split(',').join(', ') + ')' : '')
-    : 'Kein Empfänger für die Geschäftsleitung hinterlegt (unter Einstellungen). Empfänger bitte manuell eintragen.';
-
-  var centerleiterKontaktSum = null;
-  for (var cksi = 0; cksi < S.kontakte.length; cksi++) {
-    var cks = S.kontakte[cksi];
-    if (cks.standort === insp.standort && /^centerleit/i.test((cks.rolle || '').trim()) && cks.email) { centerleiterKontaktSum = cks; break; }
-  }
-  var centerleiterMailSum = centerleiterKontaktSum ? centerleiterKontaktSum.email : '';
-  var centerleiterNameSum = centerleiterKontaktSum ? centerleiterKontaktSum.name : '';
-  var subjectCL = encodeURIComponent('Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik');
-  var bodyCL = encodeURIComponent('Hallo' + (centerleiterNameSum ? ' ' + centerleiterNameSum.split(' ')[0] : '') + ',\n\nbei der Begehung am ' + fmtDate(insp.datum) + ' am Standort ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' + (clListeText || 'Aktuell sind keine offenen Mängel vorhanden.\n') + 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? Das vollständige Protokoll als PDF hänge ich gleich noch an.\n\nDanke dir und viele Grüße' + (S.signatur ? '\n\n' + S.signatur : ''));
-  var mailtoHrefCL = 'mailto:' + centerleiterMailSum + '?subject=' + subjectCL + '&body=' + bodyCL;
+    ? 'Empfänger: ' + escH(S.gfEmail) + (gfCcListe ? ' (Kopie: ' + escH(gfCcListe.split(',').join(', ')) + ')' : '')
+    : 'Kein Empfänger für die Geschäftsleitung hinterlegt (unter Einstellungen). Empfänger bitte in Gmail eintragen.';
   var clRecipientHint = centerleiterMailSum
-    ? 'Empfänger: ' + centerleiterMailSum + ' (Centerleiter ' + insp.standort + ')'
-    : 'Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte manuell eintragen.';
+    ? 'Empfänger: ' + escH(centerleiterMailSum) + ' (Centerleiter ' + insp.standort + ')'
+    : 'Kein Centerleiter-Kontakt für ' + insp.standort + ' hinterlegt (unter Technik &rarr; Kontakte). Empfänger bitte in Gmail eintragen.';
+  var standHinweis = function(ziel, an) {
+    var x = protokollEntwurfStand(insp, ziel, an);
+    return x ? '<div style="font-size:11px;font-weight:700;color:var(--warn, #b9770e);margin:-6px 0 10px">&#9993; Entwurf abgelegt am ' + fmtDate(String(x.am).slice(0, 10)) + ' ' + String(new Date(x.am).toTimeString()).slice(0, 5) + '</div>' : '';
+  };
 
   return '<div class="header header-dark">' +
     '<button class="icon-btn" data-action="go-home"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
@@ -1922,11 +1906,16 @@ function vSummary() {
     '<div style="position:relative">' +
     '<button class="btn-outline" style="width:100%" data-action="email-choice">Per E-Mail versenden</button>' +
     '<div id="email-choice-panel" class="card" style="display:none;margin-top:10px">' +
-    '<a href="' + mailtoHrefGF + '" style="text-decoration:none"><button class="btn-outline" style="width:100%;margin-bottom:8px">An Geschäftsleitung</button></a>' +
+    '<button class="btn-outline" data-action="protokoll-entwurf" data-ziel="gl" id="btn-prot-gl" style="width:100%;margin-bottom:8px">An Geschäftsleitung (mit PDF)</button>' +
     '<div style="font-size:11px;color:' + (S.gfEmail ? 'var(--text-light)' : 'var(--warn)') + ';margin:-2px 0 10px">' + gfRecipientHint + '</div>' +
-    '<a href="' + mailtoHrefCL + '" style="text-decoration:none"><button class="btn-outline" style="width:100%">An Centerleitung</button></a>' +
-    '<div style="font-size:11px;color:' + (centerleiterMailSum ? 'var(--text-light)' : 'var(--warn)') + ';margin-top:6px">' + clRecipientHint + '</div>' +
-    '<div style="font-size:11px;color:var(--text-light);margin-top:6px">PDF vorher exportieren, ein automatischer Anhang an die E-Mail ist technisch nicht möglich.</div>' +
+    standHinweis('gl', mtGF.an) +
+    '<button class="btn-outline" data-action="protokoll-entwurf" data-ziel="cl" id="btn-prot-cl" style="width:100%;margin-bottom:8px">An Centerleitung (mit PDF)</button>' +
+    '<div style="font-size:11px;color:' + (centerleiterMailSum ? 'var(--text-light)' : 'var(--warn)') + ';margin:-2px 0 10px">' + clRecipientHint + '</div>' +
+    standHinweis('cl', mtCL.an) +
+    '<div style="font-size:11px;color:var(--text-light);margin-top:6px">' + (srvConfigured()
+      ? 'Die App erstellt das Protokoll-PDF (mit Bedenkenanzeige, falls angehakt) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ohne Verbindung zum Server bietet die App das PDF zum Teilen an.'
+      : 'Keine Server-Verbindung eingerichtet: Die App erstellt das PDF und öffnet das Teilen-Menü. Dort „Mail“ wählen, Empfänger eintragen, der Betreff liegt in der Zwischenablage.') + '</div>' +
+    '<div style="font-size:11px;margin-top:8px">Mail ohne Anhang: <a href="' + mailtoHrefGF + '">an Geschäftsleitung</a> &middot; <a href="' + mailtoHrefCL + '">an Centerleitung</a></div>' +
     '</div></div>' +
     '<button class="btn-outline" data-action="edit-insp">Begehung nachbearbeiten</button>' +
     '<button class="btn-outline" data-action="go-home">Neue Begehung</button>' +
@@ -2247,7 +2236,7 @@ function vHilfe() {
     hSection('✍️', 'Unterschrift',
       'Im Zusammenfassungsbildschirm "Unterschrift hinzufügen" tippen. Mit dem Finger auf dem Bildschirm unterschreiben. Die Unterschrift erscheint im PDF-Export.') +
     hSection('📧', 'E-Mail-Versand',
-      'Öffnet die Mail-App mit vorausgefülltem Betreff und Kurztext. E-Mail-Empfänger kann in den Einstellungen hinterlegt werden.') +
+      'Begehungsprotokoll: in der Zusammenfassung "Per E-Mail versenden", dann "An Geschäftsleitung (mit PDF)" oder "An Centerleitung (mit PDF)". Die App erstellt das Protokoll-PDF (mit Bedenkenanzeige, falls angehakt, Fotos verkleinert) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab: Empfänger, Kopie, Betreff, Anrede, Kurzfassung der offenen Mängel und Signatur sind schon drin. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ein zweiter Entwurf an denselben Empfänger für dieselbe Begehung geht nur nach Rückfrage. Ohne Server-Verbindung bietet die App das PDF zum Teilen an (dort "Mail" wählen, Betreff liegt in der Zwischenablage). "Mail ohne Anhang" öffnet die Mail-App wie früher. Empfänger der Geschäftsleitung (Name, E-Mail, Kopie) stehen in den Einstellungen, die Centerleitung kommt aus den Kontakten (Rolle Centerleiter am Standort).') +
     hSection('📊', 'CSV-Export',
       'Exportiert alle Begehungen als CSV-Datei für Excel. Auf dem iPhone öffnet sich das Teilen-Menü.') +
 
@@ -5542,6 +5531,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'export-schnellmangel') { doExportSchnellmangel(); return; }
   if (a.action === 'teilen-schnellmangel') { doTeilenSchnellmangel(); return; }
   if (a.action === 'entwurf-schnellmangel') { doEntwurfSchnellmangel(); return; }
+  if (a.action === 'protokoll-entwurf') { doProtokollEntwurf(a.ziel); return; }
   if (a.action === 'copy-cl-mail') {
     var clm = a.mail || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -5830,8 +5820,8 @@ function doCSV() {
 }
 
 /* ── PDF EXPORT ── */
-function doExport() {
-  saveInsp();
+/* Protokoll-Dokument (CSS + Inhalt) für Druckfenster und Mail-PDF */
+function protokollDokument() {
   var insp = S.currentInspection;
   var c = inspCounts(insp);
   var checks = insp.checks || {};
@@ -5888,12 +5878,7 @@ function doExport() {
       '</div>';
   }
 
-  var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
-    '<title>Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum) + '</title>' +
-    '<style>' +
-    '@page{margin:18mm 18mm 14mm;size:A4;}' +
-    'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
-    'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:0;box-sizing:border-box;margin:0;}' +
+  var css = 'body{font-family:Helvetica,Arial,sans-serif;font-size:9.5pt;color:#1a1a1a;line-height:1.5;padding:0;box-sizing:border-box;margin:0;}' +
     'h1{font-size:15pt;color:#ed8b00;margin:0 0 2px;}' +
     'h2{font-size:11pt;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5DBDB;}' +
     '.pdf-footer{font-size:7pt;color:#717D7E;text-align:center;padding:8px 0 0;border-top:0.5px solid #D5DBDB;}' +
@@ -5937,11 +5922,8 @@ function doExport() {
     '.kf-tab{font-size:8pt;}.kf-tab td{padding:5px 6px;}.kf-tab tr.kf{page-break-inside:avoid;break-inside:avoid;}' +
     '.kf-ort{font-size:7pt;color:#717D7E;margin:1px 0 2px;}' +
     '.kf-foto{display:block;width:72px;height:54px;object-fit:cover;border-radius:3px;border:0.5px solid #D5DBDB;margin-top:4px;}' +
-    '.kf-stats{font-size:8.5pt;background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:6px 10px;margin-bottom:6px;}' +
-    '</style></head><body>' +
-    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
-    '<table class="pdf-page-table"><tfoot><tr><td><div class="pdf-footer">' + S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner</div></td></tr></tfoot><tbody><tr><td>' +
-    '<div class="top">' +
+    '.kf-stats{font-size:8.5pt;background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:6px 10px;margin-bottom:6px;}';
+  var body = '<div class="top">' +
     '<div><h1>Begehungsprotokoll Brandschutz</h1>' +
     '<div class="company">' + S.firmierung + ' &middot; Brandschutzbeauftragter</div></div>' +
     '<img class="logo-pdf" src="' + LOGO_SRC + '" alt="body + soul">' +
@@ -5952,7 +5934,27 @@ function doExport() {
     '<div class="meta-box"><div class="meta-lbl">Begeher</div><div class="meta-val">' + insp.begeher + '</div></div>' +
     (insp.anwesende ? '<div class="meta-box" style="grid-column:1/-1"><div class="meta-lbl">Anwesende Personen</div><div class="meta-val" style="font-size:10pt">' + insp.anwesende + '</div></div>' : '') +
     '</div>' +
-    statsSection + maengelSection + sigSection + bedenkenSection +
+    statsSection + maengelSection + sigSection + bedenkenSection;
+  return {
+    insp: insp, css: css, body: body, bedenken: bedenkenMaengel.length,
+    titel: 'Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum),
+    dateiname: ('Begehungsprotokoll_' + insp.standort + '_' + insp.datum + (bedenkenMaengel.length ? '_mit_Bedenkenanzeige' : '')).replace(/[^A-Za-z0-9ÄÖÜäöüß_.-]+/g, '-') + '.pdf',
+    fusszeile: S.firmierung + ' &middot; Brandschutzbeauftragter T. H&uuml;bner',
+    fusszeileText: S.firmierung + ' · Brandschutzbeauftragter T. Hübner',
+    // Mail-PDF: Umbruch nur vor diesen Stellen, Fotos klein, Bedenkenanzeige (hr.page-break) auf neuer Seite
+    umbruch: '.top, .meta, .kf-stats, h2, tr.kf, .sig, p, .bedenken-box', fotoSelektor: 'img.kf-foto', fotoMaxPx: 240
+  };
+}
+
+function doExport() {
+  saveInsp();
+  var d = protokollDokument();
+  var html = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">' +
+    '<title>' + d.titel + '</title>' +
+    '<style>@page{margin:18mm 18mm 14mm;size:A4;}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' + d.css + '</style></head><body>' +
+    '<div class="no-print" style="background:#1a1a1a;padding:10px 18mm;margin:0 0 14px;"><button onclick="window.close()" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:8px 20px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;cursor:pointer;">&#8592; Zur&uuml;ck zur App</button></div>' +
+    '<table class="pdf-page-table"><tfoot><tr><td><div class="pdf-footer">' + d.fusszeile + '</div></td></tr></tfoot><tbody><tr><td>' +
+    d.body +
     '</td></tr></tbody></table>' +
     '<scr' + 'ipt>setTimeout(function(){window.print();},400);<\/scr' + 'ipt>' +
     '</body></html>';
@@ -5967,7 +5969,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05a';
+var APP_STAND = '2026-11-05b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -5987,6 +5989,71 @@ function aktuellerSchnellmangel() {
   var maengel = insp.maengel || [];
   for (var i = 0; i < maengel.length; i++) { if (maengel[i].id === S.currentDefectId) return maengel[i]; }
   return maengel[0] || null;
+}
+
+/* ── BEGEHUNGSPROTOKOLL PER MAIL (05.11.2026) ──
+   ziel 'gl' = Geschäftsleitung (Einstellungen: Name, E-Mail, Kopie), 'cl' = Centerleitung (Kontakt Rolle Centerleiter
+   am Standort). Text: Anrede, Anlass, Kurzfassung der offenen Mängel, Hinweis aufs PDF. Keine Namen im Code. */
+function protokollListeText(insp) {
+  var order = ['kritisch', 'mittel', 'gering'];
+  return (insp.maengel || []).filter(function(m) { return !m.behoben; }).sort(function(a, b) {
+    return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
+  }).map(function(mc) {
+    return '- ' + (mc.checkName || 'Mangel') + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') +
+      ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' +
+      mangelKurztext(mc) + (mangelMassnahme(mc) ? '\n  Maßnahme: ' + mangelMassnahme(mc) : '') + (mc.bedenken ? '\n  (Bedenkenanzeige)' : '');
+  }).join('\n\n');
+}
+function protokollMailText(insp, ziel, mitAnhang) {
+  var c = inspCounts(insp);
+  var liste = protokollListeText(insp);
+  var bedenken = (insp.maengel || []).filter(function(m) { return m.bedenken; });
+  var fristen = (insp.maengel || []).filter(function(m) { return !m.behoben && m.frist; }).map(function(m) { return m.frist; }).sort();
+  var name, an, cc = '';
+  if (ziel === 'gl') {
+    name = (S.gfName || '').trim(); an = (S.gfEmail || '').trim();
+    cc = (S.gfCc || '').replace(/[;\s]+/g, ',').replace(/^,+|,+$/g, '');
+  } else {
+    var k = centerleiterKontaktFor(insp.standort);
+    name = k ? (k.name || '').trim() : ''; an = k ? (k.email || '').trim() : '';
+  }
+  // Rufname in Klammern hat Vorrang: „Beate (Bea) Muster“ wird mit „Bea“ angesprochen
+  var rufM = name.match(/\(([^)]+)\)/);
+  var vorname = rufM ? rufM[1].trim() : name.split(' ')[0];
+  var du = !!vorname;
+  var anrede = vorname ? 'Hallo ' + vorname : 'Hallo zusammen';
+  var anhang = mitAnhang ? (du ? 'Das vollständige Protokoll hängt als PDF an.' : 'Das vollständige Protokoll hängt als PDF an.')
+    : 'Das vollständige Protokoll als PDF bitte vorher exportieren und hier anhängen.';
+  var listeBlock = liste ? liste + '\n\n' : 'Offene Mängel gibt es aktuell keine.\n\n';
+  var subject, body;
+  if (ziel === 'gl') {
+    subject = 'Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum) + (bedenken.length ? ' – Bedenkenanzeige' : '');
+    body = anrede + ',\n\n' +
+      'am ' + fmtDate(insp.datum) + ' habe ich die Brandschutzbegehung in ' + insp.standort + ' gemacht. ' +
+      (c.offen ? 'Offen sind ' + c.offen + (c.offen === 1 ? ' Mangel' : ' Mängel') + (c.kritisch ? ', davon ' + c.kritisch + ' kritisch' : '') + ':' : 'Es sind keine Mängel offen.') + '\n\n' +
+      (c.offen ? listeBlock : '') +
+      (bedenken.length
+        ? 'Gegen ' + (bedenken.length === 1 ? 'einen Mangel' : bedenken.length + ' Mängel') + ' habe ich sicherheitstechnische Bedenken. Die Bedenkenanzeige ist Teil des PDFs. ' +
+          (du ? 'Bitte bestätige mir kurz den Eingang und teile mir den Zeitplan zur Beseitigung mit.' : 'Bitte bestätigt mir kurz den Eingang und teilt mir den Zeitplan zur Beseitigung mit.') + '\n\n'
+        : '') +
+      anhang + (du ? ' Meld dich gerne, falls du Fragen hast.' : ' Meldet euch gerne, falls ihr Fragen habt.') +
+      '\n\nViele Grüße' + (S.signatur ? '\n\n' + S.signatur : '');
+  } else {
+    subject = 'Mängel aus Begehung ' + insp.standort + ' vom ' + fmtDate(insp.datum) + ' - Weiterleitung an Technik';
+    body = anrede + ',\n\n' +
+      'bei der Brandschutzbegehung am ' + fmtDate(insp.datum) + ' in ' + insp.standort + ' sind mir folgende offene Mängel aufgefallen:\n\n' +
+      listeBlock +
+      (c.offen ? (du ? 'Kannst du das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? ' : 'Könnt ihr das bitte an den zuständigen Techniker weiterleiten, damit die Behebung angestoßen wird? ') : '') +
+      anhang + '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
+  }
+  return { an: an, cc: cc, name: name, anrede: anrede, form: du ? 'du' : 'ihr', subject: subject, body: body, frist: fristen[0] || '' };
+}
+function protokollMailto(mt) {
+  return 'mailto:' + mt.an + '?' + (mt.cc ? 'cc=' + encodeURIComponent(mt.cc) + '&' : '') + 'subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body);
+}
+function protokollEntwurfStand(insp, ziel, an) {
+  var x = (insp.protokollEntwuerfe || {})[ziel + '|' + String(an || '').toLowerCase()];
+  return x && x.am ? x : null;
 }
 
 // Betreff und Text der Mail; mitAnhang = PDF hängt schon an (Teilen-Menü)
@@ -6084,25 +6151,63 @@ function erzeugeSchnellmangelPdf(d) {
       'html,body{background:#fff;width:' + breitePx + 'px;}</style></head><body>' + d.body + '</body></html>');
     doc.close();
     var bilder = Array.prototype.slice.call(doc.images);
-    return Promise.all(bilder.map(function(img) {
-      return img.complete ? null : new Promise(function(ok) { img.onload = img.onerror = ok; });
-    })).then(function() {
+    var rand = 18, inhaltB = 174, inhaltH = 297 - 18 - 20; // unten Platz für Fußzeile
+    var grenzen = null; // Seitenanfänge in CSS-Pixeln (nur mit d.umbruch)
+    function geladen(img) { return img.complete ? null : new Promise(function(ok) { img.onload = img.onerror = ok; }); }
+    return Promise.all(bilder.map(geladen)).then(function() {
+      // Fotos vor dem Rendern verkleinern (Speicher am Handy, PDF-Größe)
+      if (!d.fotoSelektor) return;
+      return Promise.all(Array.prototype.slice.call(doc.querySelectorAll(d.fotoSelektor)).map(function(img) {
+        var max = d.fotoMaxPx || 240;
+        if (!img.naturalWidth || (img.naturalWidth <= max && img.naturalHeight <= max)) return null;
+        var f = Math.min(max / img.naturalWidth, max / img.naturalHeight);
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(img.naturalWidth * f); cv.height = Math.round(img.naturalHeight * f);
+        try { cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); img.src = cv.toDataURL('image/jpeg', 0.8); } catch(e) { return null; }
+        return geladen(img);
+      }));
+    }).then(function() {
       var hoehe = Math.ceil(doc.body.scrollHeight);
-      return window.html2canvas(doc.body, { scale: 2, backgroundColor: '#ffffff', width: breitePx, height: hoehe, windowWidth: breitePx, windowHeight: hoehe, logging: false });
+      if (d.umbruch) {
+        // Umbruch nur vor ganzen Zeilen/Abschnitten, hr.page-break erzwingt eine neue Seite
+        var seiteCss = Math.floor(inhaltH * breitePx / inhaltB);
+        var oben = function(el) { return Math.round(el.getBoundingClientRect().top); };
+        var stellen = Array.prototype.slice.call(doc.querySelectorAll(d.umbruch)).map(oben);
+        var zwang = Array.prototype.slice.call(doc.querySelectorAll('hr.page-break')).map(oben);
+        grenzen = [0];
+        var start = 0, sicher = 0;
+        while (sicher++ < 200) {
+          var z = zwang.filter(function(y) { return y > start && y <= start + seiteCss; }).sort(function(a, b) { return a - b; })[0];
+          if (z === undefined && start + seiteCss >= hoehe) break;
+          var naechste = z;
+          if (naechste === undefined) {
+            var gute = stellen.filter(function(y) { return y > start + seiteCss * 0.3 && y <= start + seiteCss; });
+            naechste = gute.length ? Math.max.apply(null, gute) : start + seiteCss;
+          }
+          if (naechste >= hoehe) break;
+          grenzen.push(naechste); start = naechste;
+        }
+      }
+      return window.html2canvas(doc.body, { scale: d.scale || 2, backgroundColor: '#ffffff', width: breitePx, height: hoehe, windowWidth: breitePx, windowHeight: hoehe, logging: false });
     }).then(function(canvas) {
       document.body.removeChild(fr);
       var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
-      var rand = 18, inhaltB = 174, inhaltH = 297 - 18 - 20; // unten Platz für Fußzeile
       var pxProMm = canvas.width / inhaltB;
       var seitePx = Math.floor(inhaltH * pxProMm);
-      var seiten = Math.max(1, Math.ceil(canvas.height / seitePx));
+      var faktor = canvas.width / breitePx;
+      var anfaenge = grenzen ? grenzen.map(function(y) { return Math.round(y * faktor); }) : null;
+      var seiten = anfaenge ? anfaenge.length : Math.max(1, Math.ceil(canvas.height / seitePx));
       for (var s = 0; s < seiten; s++) {
-        var h = Math.min(seitePx, canvas.height - s * seitePx);
+        var y0 = anfaenge ? anfaenge[s] : s * seitePx;
+        var y1 = anfaenge ? (s + 1 < seiten ? anfaenge[s + 1] : canvas.height) : y0 + seitePx;
+        var h = Math.max(1, Math.min(seitePx, y1 - y0, canvas.height - y0));
         var teil = document.createElement('canvas');
         teil.width = canvas.width; teil.height = h;
-        teil.getContext('2d').drawImage(canvas, 0, s * seitePx, canvas.width, h, 0, 0, canvas.width, h);
+        var tc = teil.getContext('2d');
+        tc.fillStyle = '#ffffff'; tc.fillRect(0, 0, teil.width, h);
+        tc.drawImage(canvas, 0, y0, canvas.width, h, 0, 0, canvas.width, h);
         if (s > 0) pdf.addPage();
-        pdf.addImage(teil.toDataURL('image/jpeg', 0.9), 'JPEG', rand, rand, inhaltB, h / pxProMm);
+        pdf.addImage(teil.toDataURL('image/jpeg', d.jpegQ || 0.9), 'JPEG', rand, rand, inhaltB, h / pxProMm);
         pdf.setDrawColor(213, 219, 219); pdf.setLineWidth(0.2);
         pdf.line(rand, 297 - 14, 210 - rand, 297 - 14);
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(113, 125, 126);
@@ -6201,6 +6306,122 @@ function doEntwurfSchnellmangel() {
     fertig();
     alert('Entwurf nicht abgelegt: ' + (e && e.message ? e.message : e));
   });
+}
+
+// Begehungsprotokoll mit PDF als Entwurf ins Brandschutz-Gmail (Rückfall: PDF teilen bzw. herunterladen)
+var protPdfVorrat = null; // fertiges PDF für den Rückfall, falls das Teilen-Menü einen neuen Tipp braucht
+var protLaeuft = false;
+function blobAlsBase64(blob) {
+  return new Promise(function(ok, fehler) {
+    var r = new FileReader();
+    r.onload = function() { ok(String(r.result).split(',')[1]); };
+    r.onerror = function() { fehler(new Error('PDF nicht lesbar')); };
+    r.readAsDataURL(blob);
+  });
+}
+function protokollPdf(d) {
+  return erzeugeSchnellmangelPdf(Object.assign({}, d, { scale: 2, jpegQ: 0.8 })).then(function(blob) {
+    // Ziel unter ca. 10 MB: sonst zweiter Lauf mit kleinerer Auflösung
+    return blob.size <= 9.5 * 1024 * 1024 ? blob : erzeugeSchnellmangelPdf(Object.assign({}, d, { scale: 1.4, jpegQ: 0.6, fotoMaxPx: 160 }));
+  });
+}
+function doProtokollEntwurf(ziel) {
+  if (protLaeuft) return; // Doppeltipp
+  saveInsp();
+  var insp = S.currentInspection;
+  if (!insp) return;
+  var btn = document.getElementById(ziel === 'gl' ? 'btn-prot-gl' : 'btn-prot-cl');
+  var btnText = ziel === 'gl' ? 'An Geschäftsleitung (mit PDF)' : 'An Centerleitung (mit PDF)';
+  var mt = protokollMailText(insp, ziel, true);
+  var schluessel = ziel + '|' + insp.id + '|' + JSON.stringify([mt.an, mt.cc, mt.subject, mt.body]);
+
+  // Rückfall, zweiter Tipp: fertiges PDF teilen
+  if (protPdfVorrat && protPdfVorrat.schluessel === schluessel) {
+    var vorrat = protPdfVorrat; protPdfVorrat = null;
+    if (btn) btn.textContent = btnText;
+    protokollTeilen(vorrat.file, mt);
+    return;
+  }
+
+  var stand = protokollEntwurfStand(insp, ziel, mt.an);
+  if (srvConfigured() && stand && !confirm('Für diese Begehung liegt schon ein Entwurf an ' + (mt.an || 'diesen Empfänger') + ' (abgelegt am ' + fmtDate(String(stand.am).slice(0, 10)) + ' um ' + String(new Date(stand.am).toTimeString()).slice(0, 5) + ' Uhr). Trotzdem noch einmal ablegen?')) return;
+  if (!mt.an && !confirm('Für ' + (ziel === 'gl' ? 'die Geschäftsleitung' : 'die Centerleitung von ' + insp.standort) + ' ist keine E-Mail-Adresse hinterlegt. Trotzdem weiter? (Empfänger dann selbst eintragen)')) return;
+  if (navigator.clipboard && navigator.clipboard.writeText && !srvConfigured()) navigator.clipboard.writeText(mt.subject).catch(function(){});
+
+  protLaeuft = true;
+  var fertig = function(text) { protLaeuft = false; if (btn) { btn.disabled = false; btn.textContent = text || btnText; } };
+  if (btn) { btn.disabled = true; btn.textContent = 'PDF wird erstellt …'; }
+  var d = protokollDokument();
+  var pdfBlob = null;
+  protokollPdf(d).then(function(blob) {
+    pdfBlob = blob;
+    if (!srvConfigured()) throw { rueckfall: 'keine Server-Verbindung eingerichtet' };
+    if (btn) btn.textContent = 'Wird abgelegt …';
+    return blobAlsBase64(blob).then(function(b64) {
+      var ac = window.AbortController ? new AbortController() : null;
+      var uhr = ac ? setTimeout(function() { ac.abort(); }, 90000) : null;
+      return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
+        method: 'POST', signal: ac ? ac.signal : undefined,
+        headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ an: mt.an, cc: mt.cc, betreff: mt.subject, text: mt.body, dateiname: d.dateiname, pdf: b64,
+          frist: mt.frist, anrede: mt.anrede, form: mt.form === 'du' ? 'du' : 'sie', zusatz: ziel === 'gl' ? 'Begehungsprotokoll an Geschäftsleitung' : 'Begehungsprotokoll an Centerleitung' })
+      }).then(function(r) {
+        if (uhr) clearTimeout(uhr);
+        return r.json().catch(function() { return {}; }).then(function(res) {
+          if (!r.ok || !res.ok) throw { rueckfall: res.fehler || ('Server antwortet ' + r.status) };
+        });
+      }, function(e) {
+        if (uhr) clearTimeout(uhr);
+        throw { rueckfall: 'Server nicht erreichbar' + (navigator.onLine === false ? ' (offline)' : '') };
+      });
+    });
+  }).then(function() {
+    insp.protokollEntwuerfe = insp.protokollEntwuerfe || {};
+    insp.protokollEntwuerfe[ziel + '|' + String(mt.an || '').toLowerCase()] = { am: new Date().toISOString(), betreff: mt.subject };
+    save();
+    fertig();
+    render();
+    var ecp = document.getElementById('email-choice-panel'); if (ecp) ecp.style.display = 'block';
+    // Postfach-Name aus den Einstellungen (Standard-E-Mail), nicht im Code
+    var postfach = String(S.defaultEmail || '').split('@')[0];
+    alert('Entwurf liegt in Gmail (' + (postfach || 'Brandschutz-Postfach') + ').\n\nNach etwa einer Minute unter „Entwürfe“. Dort öffnen, prüfen und senden.');
+  }).catch(function(e) {
+    var grund = e && e.rueckfall ? e.rueckfall : (e && e.message ? e.message : String(e));
+    if (!pdfBlob) {
+      fertig();
+      alert('Das PDF konnte nicht erstellt werden' + (navigator.onLine === false ? ' (keine Internetverbindung, wird beim ersten Mal gebraucht)' : '') + '.\n\nBitte „Protokoll exportieren (PDF)“ nutzen und die Mail über „Mail ohne Anhang“ öffnen, das PDF dort anhängen.\n\n' + grund);
+      return;
+    }
+    var file = new File([pdfBlob], d.dateiname, { type: 'application/pdf' });
+    var teilbar = navigator.share && navigator.canShare && navigator.canShare({ files: [file] });
+    if (teilbar) {
+      // iOS verlangt nach dem Warten einen neuen Tipp für das Teilen-Menü
+      protPdfVorrat = { schluessel: schluessel, file: file };
+      fertig('PDF ist fertig: jetzt teilen');
+      alert((srvConfigured() ? 'Kein Entwurf abgelegt: ' + grund + '.\n\n' : '') + 'Das PDF ist fertig. Tippe auf „PDF ist fertig: jetzt teilen“ und wähle „Mail“. Empfänger eintragen, der Betreff liegt in der Zwischenablage (Betreff antippen, Einsetzen).');
+      return;
+    }
+    fertig();
+    alert((srvConfigured() ? 'Kein Entwurf abgelegt: ' + grund + '.\n\n' : '') + 'Das PDF wird jetzt heruntergeladen und eine Mail ohne Anhang geöffnet. Bitte die Datei ' + d.dateiname + ' dort anhängen.');
+    protokollHerunterladen(file, mt);
+  });
+}
+function protokollTeilen(file, mt) {
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mt.subject).catch(function(){});
+  navigator.share({ files: [file], title: mt.subject, text: mt.body }).catch(function(e) {
+    if (e && e.name === 'AbortError') return;
+    alert('Teilen nicht möglich: ' + (e && e.message ? e.message : e));
+  });
+}
+function protokollHerunterladen(file, mt) {
+  var url = URL.createObjectURL(file);
+  var a = document.createElement('a');
+  a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+  setTimeout(function() {
+    window.location.href = protokollMailto({ an: mt.an, cc: mt.cc, subject: mt.subject,
+      body: mt.body.replace('Das vollständige Protokoll hängt als PDF an.', 'Das vollständige Protokoll liegt als PDF bei (bitte die eben gespeicherte Datei ' + file.name + ' anhängen).') });
+  }, 600);
 }
 
 function schnellmangelDokument() {
