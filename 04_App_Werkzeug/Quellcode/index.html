@@ -1502,13 +1502,36 @@ function mangelSuchen(inspid, mid) {
   }
   return null;
 }
-function mangelAnstossMail(it) {
+// Bis zu 3 Fotos des Mangels als verkleinertes JPEG (Base64) für den Mail-Entwurf
+function mangelFotosFuerMail(m) {
+  var quellen = [];
+  (m.fotos || []).forEach(function(f, i) { if (typeof f === 'string' && f.indexOf('data:image') === 0 && quellen.length < 3) quellen.push({ f: f, i: i }); });
+  return Promise.all(quellen.map(function(q, n) {
+    return new Promise(function(ok) {
+      var img = new Image();
+      img.onload = function() {
+        var k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        ok({ name: 'Mangel_Foto' + (n + 1) + '.jpg', b64: c.toDataURL('image/jpeg', 0.75).split(',')[1] });
+      };
+      img.onerror = function() { ok(null); };
+      img.src = q.f;
+    });
+  })).then(function(l) { return l.filter(Boolean); });
+}
+function mangelAnstossMail(it, nFotos) {
   var m = it.mangel, an = '', z = String(m.zustaendig || '').toLowerCase().trim(), tr = [];
   // Nur eindeutige Treffer; "Thomas"/"Hübi"/Haustechnik sind Thomas selbst und passen nicht zu einem Kontakt gleichen Vornamens
   if (z.length >= 4 && !/^(thomas|hübi|haustechnik)/.test(z)) (S.kontakte || []).forEach(function(k) { if (k.email && k.name && String(k.name).toLowerCase().indexOf(z) >= 0) tr.push(k.email); });
   if (tr.length === 1) an = tr[0];
   if (!an) an = centerleiterEmailFor(it.insp.standort);
+  var orte = [];
+  (m.fotoTexte || []).forEach(function(t) { t = String(t || '').trim(); if (t && orte.indexOf(t) < 0) orte.push(t); });
+  var ortText = orte.join(', '), tuerText = tuerenText(mangelTueren(m, it.insp));
   var body = 'Hallo,\n\nich frage kurz nach dem Stand zu diesem Punkt in ' + it.insp.standort + ':\n\n' + mangelTitel(m) +
+    (ortText ? '\nOrt: ' + ortText : '') + (tuerText ? '\nTüren: ' + tuerText : '') +
+    (nFotos ? '\n' + (nFotos === 1 ? 'Ein Foto hängt an.' : 'Die Fotos hängen an.') : '') +
     '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   return { an: an, subject: 'Stand: ' + mangelTitel(m).slice(0, 90) + ' (' + it.insp.standort + ')', body: body };
 }
@@ -5364,9 +5387,12 @@ document.addEventListener('click', function(e) {
       save(); render();
     };
     if (srvConfigured()) {  // mangel-anstossen-entwurf: Entwurf im Brandschutz-Gmail, Thomas prüft und sendet dort
-      fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
-        method: 'POST', headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ an: am.an, betreff: am.subject, text: am.body, ohnePdf: true, frist: neuNachfass, anrede: '', form: 'du', zusatz: 'Nachfrage zu einem Mangel' })
+      mangelFotosFuerMail(ma.mangel).then(function(bilder) {
+        var am2 = mangelAnstossMail(ma, bilder.length);
+        return fetch(S.srvUrl.replace(/\/+$/, '') + '/api/entwurf', {
+          method: 'POST', headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ an: am2.an, betreff: am2.subject, text: am2.body, ohnePdf: true, bilder: bilder, frist: neuNachfass, anrede: '', form: 'du', zusatz: 'Nachfrage zu einem Mangel' })
+        });
       }).then(function(r) {
         return r.json().catch(function() { return {}; }).then(function(res) {
           if (!r.ok || !res.ok) throw new Error(res.fehler || ('Server antwortet ' + r.status));
@@ -6144,7 +6170,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05i';
+var APP_STAND = '2026-11-05j';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
