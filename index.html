@@ -2935,7 +2935,7 @@ var TAG_KALENDER = true;
 // Auftrag an Claude aus einem Punkt: Feld auftrag geht über den Abgleich an den Server (tag-auftraege.py),
 // der Server schreibt auftragStatus (erledigt/rueckfrage) und auftragErgebnis zurück. Zum Abschalten false.
 var TAG_AUFTRAG = true;
-var TAG_AUFTRAG_VORLAGEN = ['Nachfass-Mail schreiben', 'Telefonat in den Kalender', 'Mail an Basti (technik@)', 'Erledigt, bitte vermerken'];
+var TAG_AUFTRAG_VORLAGEN = ['Stand aktualisieren', 'Nachfass-Mail schreiben', 'Telefonat in den Kalender', 'Mail an Basti (technik@)', 'Erledigt, bitte vermerken'];
 // Bei Anrufen heißt der Knopf „Ergebnis“: was beim Telefonat herauskam, Claude vermerkt es und erledigt Folgeschritte
 var TAG_ERGEBNIS_VORLAGEN = ['Erreicht: ', 'Nicht erreicht, morgen nochmal', 'Rückruf vereinbart am ', 'Termin vereinbart am '];
 var FENSTER_NAME = { morgen: 'Morgen', mittag: 'Mittag', nachmittag: 'Heimfahrt' };
@@ -6260,7 +6260,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05n';
+var APP_STAND = '2026-11-05o';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
