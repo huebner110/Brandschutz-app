@@ -1189,6 +1189,14 @@ function ersteSaetze(t, n) {
 }
 function mangelKurztext(m) { return String((m && m.kurztext) || '').trim() || ersteSaetze(m && m.beschreibung, 2); }
 function mangelMassnahme(m) { return String((m && m.massnahme) || '').trim(); }
+// Titel eines Mangels in PDF und Mails: Kurztext bzw. Kurzfassung der Beschreibung, nicht der Prüfpunkt (klingt wie Soll-Zustand)
+function mangelTitel(m) {
+  var t = mangelKurztext(m).replace(/\s+/g, ' ').trim();
+  return t || ('Mangel: ' + ((m && m.checkName) || 'ohne Beschreibung'));
+}
+// Zuständig für die Anzeige in PDF und Mails: leer = Haustechnik (nur Anzeige, nichts in den Daten)
+var ZUST_STANDARD = 'Haustechnik body + soul';
+function mangelZustaendig(m) { return String((m && m.zustaendig) || '').replace(/\s+/g, ' ').trim() || ZUST_STANDARD; }
 // Hinweis an die Centerleitung (nur Mailtext an die Centerleitung, nicht im PDF), eine Zeile
 function mangelHinweisCL(m) { return String((m && m.hinweisCL) || '').replace(/\s+/g, ' ').trim(); }
 // Entscheidung der Geschäftsleitung nötig (nur Mailtext an die Geschäftsleitung, nicht im PDF), eine Zeile
@@ -1222,12 +1230,12 @@ function kurzTabelleHtml(liste, insp, checks) {
     var stand = mg.behoben ? '<span style="color:#808B96">Behoben' + (mg.behobDatum ? '<br>' + fmtDate(mg.behobDatum) : '') + '</span>'
       : 'Offen' + (mg.uebernommen && mg.uebernommenSeit ? '<br><span style="font-size:7pt;color:#717D7E">seit ' + fmtDate(mg.uebernommenSeit) + '</span>' : '');
     return '<tr class="kf">' +
-      '<td><strong>' + (i + 1) + '. ' + escH(mg.checkName || 'Mangel') + '</strong>' +
+      '<td><strong>' + (i + 1) + '. ' + escH(mangelTitel(mg)) + '</strong>' +
       (ort.length ? '<div class="kf-ort">' + ort.join(' &middot; ') + '</div>' : '') +
-      '<div>' + escH(mangelKurztext(mg)) + '</div>' +
+      (mg.checkName && mg.checkName.indexOf('Direktmeldung') !== 0 && mangelKurztext(mg) ? '<div class="kf-pp">(Prüfpunkt: ' + escH(mg.checkName) + ')</div>' : '') +
       (foto ? '<img class="kf-foto" src="' + foto + '">' : '') + '</td>' +
       '<td><span class="db ' + dc + '">' + dring.charAt(0).toUpperCase() + dring.slice(1) + '</span></td>' +
-      '<td>' + (escH(mg.zustaendig || '').trim() || '–') + '</td>' +
+      '<td>' + escH(mangelZustaendig(mg)) + '</td>' +
       '<td>' + (escH(mangelMassnahme(mg)) || '–') + '</td>' +
       '<td>' + frist + '</td>' +
       '<td>' + stand + '</td></tr>';
@@ -1719,7 +1727,8 @@ function vDefect() {
     '<button class="seg-btn' + (m.dringlichkeit === 'kritisch' ? ' seg-active-crit' : '') + '" data-action="set-dring" data-val="kritisch">Kritisch</button>' +
     '</div></div>' +
     '<div class="form-group"><label class="form-label">Zuständig (optional)</label>' +
-    '<input type="text" class="form-input" id="d-zust" value="' + (m.zustaendig || '') + '" placeholder="Name oder Firma"></div>' +
+    '<input type="text" class="form-input" id="d-zust" value="' + (m.zustaendig || '') + '" placeholder="' + ZUST_STANDARD + '">' +
+    '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Leer: im PDF und in den Mails steht „' + ZUST_STANDARD + '“.</div></div>' +
     '<div class="form-group"><label class="form-label">Maßnahme (was ist getan, mit Datum, optional)</label>' +
     '<textarea class="form-textarea" id="d-massn" rows="2" style="min-height:56px" placeholder="z. B. 05.11.: Reparatur beauftragt">' + escH(m.massnahme || '') + '</textarea></div>' +
     '<div class="form-group"><label class="form-label">Hinweis an Centerleitung (optional)</label>' +
@@ -2249,7 +2258,7 @@ function vHilfe() {
     hSection('✍️', 'Unterschrift',
       'Im Zusammenfassungsbildschirm "Unterschrift hinzufügen" tippen. Mit dem Finger auf dem Bildschirm unterschreiben. Die Unterschrift erscheint im PDF-Export.') +
     hSection('📧', 'E-Mail-Versand',
-      'Begehungsprotokoll: in der Zusammenfassung "Per E-Mail versenden", dann "An Geschäftsleitung (mit PDF)" oder "An Centerleitung (mit PDF)". Die App erstellt das Protokoll-PDF (an die Geschäftsleitung mit Bedenkenanzeige, falls angehakt; an die Centerleitung ohne Bedenkenanzeige-Blatt; Fotos verkleinert) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab: Empfänger, Kopie, Betreff, Anrede, Kurzfassung der offenen Mängel und Signatur sind schon drin. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ein zweiter Entwurf an denselben Empfänger für dieselbe Begehung geht nur nach Rückfrage. Ohne Server-Verbindung bietet die App das PDF zum Teilen an (dort "Mail" wählen, Betreff liegt in der Zwischenablage). "Mail ohne Anhang" öffnet die Mail-App wie früher. Empfänger der Geschäftsleitung (Name, E-Mail, Kopie) stehen in den Einstellungen, die Centerleitung kommt aus den Kontakten (Rolle Centerleiter am Standort). Die Mail an die Centerleitung sagt klar, dass du bzw. die Technik sich um die Punkte kümmern, und zeigt je offenem Mangel Kurztext, Zuständig, Stand (Maßnahme) und Frist. Soll das Haus selbst etwas beachten (z. B. Tür nicht offen halten), das im Mangel unter „Hinweis an Centerleitung“ eintragen: es steht dann in der Mail unter „Bitte beachten“, nicht im PDF und nicht in der Mail an die Geschäftsleitung. Die Mail an die Geschäftsleitung zeigt oben nur die offenen Mängel mit Haken „Bedenkenanzeige“, kritische Mängel und Mängel mit „Entscheidung der Geschäftsleitung nötig“ (je eine Zeile: Kurztext, Zuständig, Stand, Frist) mit der Bitte um Eingangsbestätigung und Zeitplan. Alle übrigen offenen Mängel stehen nur als Anzahl unter „Zur Information“, mit dem Satz, dass die Technik sie erledigt. Behobene Mängel fehlen, das PDF enthält alles. Muss die Geschäftsleitung etwas entscheiden oder freigeben, das im Mangel unter „Entscheidung der Geschäftsleitung nötig“ eintragen: es steht dann oben in der Mail, nicht im PDF und nicht in der Mail an die Centerleitung.') +
+      'Begehungsprotokoll: in der Zusammenfassung "Per E-Mail versenden", dann "An Geschäftsleitung (mit PDF)" oder "An Centerleitung (mit PDF)". Die App erstellt das Protokoll-PDF (an die Geschäftsleitung mit Bedenkenanzeige, falls angehakt; an die Centerleitung ohne Bedenkenanzeige-Blatt; Fotos verkleinert) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab: Empfänger, Kopie, Betreff, Anrede, Kurzfassung der offenen Mängel und Signatur sind schon drin. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ein zweiter Entwurf an denselben Empfänger für dieselbe Begehung geht nur nach Rückfrage. Ohne Server-Verbindung bietet die App das PDF zum Teilen an (dort "Mail" wählen, Betreff liegt in der Zwischenablage). "Mail ohne Anhang" öffnet die Mail-App wie früher. Empfänger der Geschäftsleitung (Name, E-Mail, Kopie) stehen in den Einstellungen, die Centerleitung kommt aus den Kontakten (Rolle Centerleiter am Standort). Die Mail an die Centerleitung sagt klar, dass du bzw. die Technik sich um die Punkte kümmern, und zeigt je offenem Mangel Kurztext, Zuständig, Stand (Maßnahme) und Frist. Soll das Haus selbst etwas beachten (z. B. Tür nicht offen halten), das im Mangel unter „Hinweis an Centerleitung“ eintragen: es steht dann in der Mail unter „Bitte beachten“, nicht im PDF und nicht in der Mail an die Geschäftsleitung. Die Mail an die Geschäftsleitung zeigt oben nur die offenen Mängel mit Haken „Bedenkenanzeige“, kritische Mängel und Mängel mit „Entscheidung der Geschäftsleitung nötig“ (je eine Zeile: Kurztext, Zuständig, Stand, Frist) mit der Bitte um Eingangsbestätigung und Zeitplan. Alle übrigen offenen Mängel stehen nur als Anzahl unter „Zur Information“, mit dem Satz, dass die Technik sie erledigt. Behobene Mängel fehlen, das PDF enthält alles. Muss die Geschäftsleitung etwas entscheiden oder freigeben, das im Mangel unter „Entscheidung der Geschäftsleitung nötig“ eintragen: es steht dann oben in der Mail, nicht im PDF und nicht in der Mail an die Centerleitung. Jeder Mangel steht in PDF und Mails mit seinem Kurztext (fehlt er: die ersten zwei Sätze der Beschreibung), nicht mit dem Namen des Prüfpunkts. Der Prüfpunkt steht im PDF nur klein darunter. Ist bei einem Mangel niemand als zuständig eingetragen, steht dort „Haustechnik body + soul“.') +
     hSection('📊', 'CSV-Export',
       'Exportiert alle Begehungen als CSV-Datei für Excel. Auf dem iPhone öffnet sich das Teilen-Menü.') +
 
@@ -5937,6 +5946,7 @@ function protokollDokument(opt) {
     'hr.page-break{page-break-after:always;border:none;}' +
     '.kf-tab{font-size:8pt;}.kf-tab td{padding:5px 6px;}.kf-tab tr.kf{page-break-inside:avoid;break-inside:avoid;}' +
     '.kf-ort{font-size:7pt;color:#717D7E;margin:1px 0 2px;}' +
+    '.kf-pp{font-size:7pt;color:#95A5A6;margin:1px 0 2px;}' +
     '.kf-foto{display:block;width:72px;height:54px;object-fit:cover;border-radius:3px;border:0.5px solid #D5DBDB;margin-top:4px;}' +
     '.kf-stats{font-size:8.5pt;background:#F7F9F9;border:0.5px solid #D5DBDB;border-radius:5px;padding:6px 10px;margin-bottom:6px;}';
   var body = '<div class="top">' +
@@ -5985,7 +5995,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05d';
+var APP_STAND = '2026-11-05e';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -6015,9 +6025,9 @@ function protokollListeText(insp) {
   return (insp.maengel || []).filter(function(m) { return !m.behoben; }).sort(function(a, b) {
     return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
   }).map(function(mc) {
-    return '- ' + (mc.checkName || 'Mangel') + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') +
-      ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + (mc.zustaendig ? ', zuständig: ' + mc.zustaendig : '') + ')\n  ' +
-      mangelKurztext(mc) + (mangelMassnahme(mc) ? '\n  Maßnahme: ' + mangelMassnahme(mc) : '') + (mc.bedenken ? '\n  (Bedenkenanzeige)' : '');
+    return '- ' + mangelTitel(mc) + (mangelTueren(mc, insp).length ? ', Türen: ' + tuerenText(mangelTueren(mc, insp)) : '') +
+      ' (' + mc.dringlichkeit + (mc.frist ? ', Frist ' + fmtDate(mc.frist) : '') + ', zuständig: ' + mangelZustaendig(mc) + ')' +
+      (mangelMassnahme(mc) ? '\n  Maßnahme: ' + mangelMassnahme(mc) : '') + (mc.bedenken ? '\n  (Bedenkenanzeige)' : '');
   }).join('\n\n');
 }
 function protokollClListeText(insp) {
@@ -6026,10 +6036,9 @@ function protokollClListeText(insp) {
     return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
   }).map(function(mc) {
     var tu = mangelTueren(mc, insp).length ? ' (Türen: ' + tuerenText(mangelTueren(mc, insp)) + ')' : '';
-    var zust = String(mc.zustaendig || '').trim();
     var massn = mangelMassnahme(mc).replace(/\s+/g, ' ');
-    return '- ' + (mc.checkName || 'Mangel') + tu + ': ' + mangelKurztext(mc) +
-      (zust ? '\n  Zuständig: ' + zust : '') +
+    return '- ' + mangelTitel(mc) + tu +
+      '\n  Zuständig: ' + mangelZustaendig(mc) +
       '\n  Stand: ' + (massn || 'noch offen' + (mc.uebernommen && mc.uebernommenSeit ? ' seit ' + fmtDate(mc.uebernommenSeit) : '')) +
       (mc.frist ? '\n  Frist: ' + fmtDate(mc.frist) : '');
   }).join('\n\n');
@@ -6042,10 +6051,8 @@ function protokollGlBloecke(insp) {
     return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
   });
   var zeilen = wichtig.map(function(mc) {
-    var text = String(mc.kurztext || '').replace(/\s+/g, ' ').trim() || mc.checkName || 'Mangel';
-    var zust = String(mc.zustaendig || '').replace(/\s+/g, ' ').trim();
     var massn = mangelMassnahme(mc).replace(/\s+/g, ' ');
-    return '- ' + text + ' | Zuständig: ' + (zust || 'noch offen') +
+    return '- ' + mangelTitel(mc) + ' | Zuständig: ' + mangelZustaendig(mc) +
       ' | Stand: ' + (massn || 'noch offen' + (mc.uebernommen && mc.uebernommenSeit ? ' seit ' + fmtDate(mc.uebernommenSeit) : '')) +
       (mc.frist ? ' | Frist: ' + fmtDate(mc.frist) : '') +
       (mangelHinweisGL(mc) ? '\n  Entscheidung nötig: ' + mangelHinweisGL(mc) : '');
