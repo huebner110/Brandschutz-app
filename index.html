@@ -1191,9 +1191,11 @@ function mangelKurztext(m) { return String((m && m.kurztext) || '').trim() || er
 function mangelMassnahme(m) { return String((m && m.massnahme) || '').trim(); }
 // Hinweis an die Centerleitung (nur Mailtext an die Centerleitung, nicht im PDF), eine Zeile
 function mangelHinweisCL(m) { return String((m && m.hinweisCL) || '').replace(/\s+/g, ' ').trim(); }
+// Entscheidung der Geschäftsleitung nötig (nur Mailtext an die Geschäftsleitung, nicht im PDF), eine Zeile
+function mangelHinweisGL(m) { return String((m && m.hinweisGL) || '').replace(/\s+/g, ' ').trim(); }
 function mangelKurzFelderMerken(m) {
   if (!m) return;
-  [['d-kurz', 'kurztext'], ['d-massn', 'massnahme'], ['d-hinwcl', 'hinweisCL']].forEach(function(p) {
+  [['d-kurz', 'kurztext'], ['d-massn', 'massnahme'], ['d-hinwcl', 'hinweisCL'], ['d-hinwgl', 'hinweisGL']].forEach(function(p) {
     var el = document.getElementById(p[0]);
     if (!el) return;
     var v = el.value.replace(/[<>]/g, '').trim();
@@ -1723,6 +1725,9 @@ function vDefect() {
     '<div class="form-group"><label class="form-label">Hinweis an Centerleitung (optional)</label>' +
     '<textarea class="form-textarea" id="d-hinwcl" rows="2" style="min-height:56px" placeholder="z. B. Bitte nichts vor die Tür stellen.">' + escH(m.hinweisCL || '') + '</textarea>' +
     '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Nur wenn das Haus selbst etwas tun oder lassen soll. Steht in der Mail an die Centerleitung unter „Bitte beachten“, nicht im PDF.</div></div>' +
+    '<div class="form-group"><label class="form-label">Entscheidung der Geschäftsleitung nötig (optional)</label>' +
+    '<textarea class="form-textarea" id="d-hinwgl" rows="2" style="min-height:56px" placeholder="z. B. Freigabe Angebot Wartung Brandschutztüren">' + escH(m.hinweisGL || '') + '</textarea>' +
+    '<div style="font-size:11px;color:var(--text-light);margin-top:4px">Nur wenn die Geschäftsleitung etwas entscheiden oder freigeben muss. Steht in der Mail an die Geschäftsleitung oben bei den wichtigen Punkten, nicht im PDF und nicht in der Mail an die Centerleitung.</div></div>' +
     '<div class="form-group"><label class="form-label">Wer ist dran?</label>' +
     '<div class="seg-control">' +
     '<button class="seg-btn' + (!m.beiAnderen ? ' seg-active-ok' : '') + '" data-action="set-bei" data-val="mir">Bei mir</button>' +
@@ -1913,6 +1918,9 @@ function vSummary() {
     '<div id="email-choice-panel" class="card" style="display:none;margin-top:10px">' +
     '<button class="btn-outline" data-action="protokoll-entwurf" data-ziel="gl" id="btn-prot-gl" style="width:100%;margin-bottom:8px">An Geschäftsleitung (mit PDF)</button>' +
     '<div style="font-size:11px;color:' + (S.gfEmail ? 'var(--text-light)' : 'var(--warn)') + ';margin:-2px 0 10px">' + gfRecipientHint + '</div>' +
+    '<div style="font-size:11px;color:var(--text-light);margin:-6px 0 10px" id="gl-inhalt">' + (mtGF.glWichtig
+      ? 'Mail: ' + mtGF.glWichtig + (mtGF.glWichtig === 1 ? ' Punkt' : ' Punkte') + ' mit Bitte um Rückmeldung' + (mtGF.glRest ? ', ' + mtGF.glRest + ' nur zur Information (Anzahl)' : '')
+      : (mtGF.glRest ? 'Keine Bedenken: Mail nur zur Information (' + mtGF.glRest + ' offen, Anzahl)' : 'Keine offenen Mängel: Mail nur zur Information')) + '</div>' +
     standHinweis('gl', mtGF.an) +
     '<button class="btn-outline" data-action="protokoll-entwurf" data-ziel="cl" id="btn-prot-cl" style="width:100%;margin-bottom:8px">An Centerleitung (mit PDF)</button>' +
     '<div style="font-size:11px;color:' + (centerleiterMailSum ? 'var(--text-light)' : 'var(--warn)') + ';margin:-2px 0 10px">' + clRecipientHint + '</div>' +
@@ -2241,7 +2249,7 @@ function vHilfe() {
     hSection('✍️', 'Unterschrift',
       'Im Zusammenfassungsbildschirm "Unterschrift hinzufügen" tippen. Mit dem Finger auf dem Bildschirm unterschreiben. Die Unterschrift erscheint im PDF-Export.') +
     hSection('📧', 'E-Mail-Versand',
-      'Begehungsprotokoll: in der Zusammenfassung "Per E-Mail versenden", dann "An Geschäftsleitung (mit PDF)" oder "An Centerleitung (mit PDF)". Die App erstellt das Protokoll-PDF (an die Geschäftsleitung mit Bedenkenanzeige, falls angehakt; an die Centerleitung ohne Bedenkenanzeige-Blatt; Fotos verkleinert) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab: Empfänger, Kopie, Betreff, Anrede, Kurzfassung der offenen Mängel und Signatur sind schon drin. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ein zweiter Entwurf an denselben Empfänger für dieselbe Begehung geht nur nach Rückfrage. Ohne Server-Verbindung bietet die App das PDF zum Teilen an (dort "Mail" wählen, Betreff liegt in der Zwischenablage). "Mail ohne Anhang" öffnet die Mail-App wie früher. Empfänger der Geschäftsleitung (Name, E-Mail, Kopie) stehen in den Einstellungen, die Centerleitung kommt aus den Kontakten (Rolle Centerleiter am Standort). Die Mail an die Centerleitung sagt klar, dass du bzw. die Technik sich um die Punkte kümmern, und zeigt je offenem Mangel Kurztext, Zuständig, Stand (Maßnahme) und Frist. Soll das Haus selbst etwas beachten (z. B. Tür nicht offen halten), das im Mangel unter „Hinweis an Centerleitung“ eintragen: es steht dann in der Mail unter „Bitte beachten“, nicht im PDF und nicht in der Mail an die Geschäftsleitung.') +
+      'Begehungsprotokoll: in der Zusammenfassung "Per E-Mail versenden", dann "An Geschäftsleitung (mit PDF)" oder "An Centerleitung (mit PDF)". Die App erstellt das Protokoll-PDF (an die Geschäftsleitung mit Bedenkenanzeige, falls angehakt; an die Centerleitung ohne Bedenkenanzeige-Blatt; Fotos verkleinert) und legt die Mail mit Anhang als Entwurf im Brandschutz-Gmail ab: Empfänger, Kopie, Betreff, Anrede, Kurzfassung der offenen Mängel und Signatur sind schon drin. Gesendet wird erst, wenn du den Entwurf in Gmail öffnest und auf Senden tippst. Ein zweiter Entwurf an denselben Empfänger für dieselbe Begehung geht nur nach Rückfrage. Ohne Server-Verbindung bietet die App das PDF zum Teilen an (dort "Mail" wählen, Betreff liegt in der Zwischenablage). "Mail ohne Anhang" öffnet die Mail-App wie früher. Empfänger der Geschäftsleitung (Name, E-Mail, Kopie) stehen in den Einstellungen, die Centerleitung kommt aus den Kontakten (Rolle Centerleiter am Standort). Die Mail an die Centerleitung sagt klar, dass du bzw. die Technik sich um die Punkte kümmern, und zeigt je offenem Mangel Kurztext, Zuständig, Stand (Maßnahme) und Frist. Soll das Haus selbst etwas beachten (z. B. Tür nicht offen halten), das im Mangel unter „Hinweis an Centerleitung“ eintragen: es steht dann in der Mail unter „Bitte beachten“, nicht im PDF und nicht in der Mail an die Geschäftsleitung. Die Mail an die Geschäftsleitung zeigt oben nur die offenen Mängel mit Haken „Bedenkenanzeige“, kritische Mängel und Mängel mit „Entscheidung der Geschäftsleitung nötig“ (je eine Zeile: Kurztext, Zuständig, Stand, Frist) mit der Bitte um Eingangsbestätigung und Zeitplan. Alle übrigen offenen Mängel stehen nur als Anzahl unter „Zur Information“, mit dem Satz, dass die Technik sie erledigt. Behobene Mängel fehlen, das PDF enthält alles. Muss die Geschäftsleitung etwas entscheiden oder freigeben, das im Mangel unter „Entscheidung der Geschäftsleitung nötig“ eintragen: es steht dann oben in der Mail, nicht im PDF und nicht in der Mail an die Centerleitung.') +
     hSection('📊', 'CSV-Export',
       'Exportiert alle Begehungen als CSV-Datei für Excel. Auf dem iPhone öffnet sich das Teilen-Menü.') +
 
@@ -5265,6 +5273,7 @@ document.addEventListener('click', function(e) {
       if (vm.kurztext) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].kurztext = vm.kurztext;
       if (vm.massnahme) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].massnahme = vm.massnahme;
       if (vm.hinweisCL) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].hinweisCL = vm.hinweisCL;
+      if (vm.hinweisGL) S.currentInspection.maengel[S.currentInspection.maengel.length - 1].hinweisGL = vm.hinweisGL;
       if (offeneVorher[ov].inspId) S.currentInspection.weiterVon = (S.currentInspection.weiterVon || []).concat([{ inspId: offeneVorher[ov].inspId, mid: vm.id }]);
     }
     S.collapsedCats = fertigeBereiche(S.currentInspection);
@@ -5976,7 +5985,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05c';
+var APP_STAND = '2026-11-05d';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -6025,6 +6034,30 @@ function protokollClListeText(insp) {
       (mc.frist ? '\n  Frist: ' + fmtDate(mc.frist) : '');
   }).join('\n\n');
 }
+// Geschäftsleitung (05.11.2026): wichtig = offen und (Haken Bedenkenanzeige, kritisch oder Entscheidung nötig), Rest nur als Anzahl
+function protokollGlBloecke(insp) {
+  var order = ['kritisch', 'mittel', 'gering'];
+  var offen = (insp.maengel || []).filter(function(m) { return !m.behoben; });
+  var wichtig = offen.filter(function(m) { return m.bedenken || m.dringlichkeit === 'kritisch' || mangelHinweisGL(m); }).sort(function(a, b) {
+    return order.indexOf(a.dringlichkeit) - order.indexOf(b.dringlichkeit);
+  });
+  var zeilen = wichtig.map(function(mc) {
+    var text = String(mc.kurztext || '').replace(/\s+/g, ' ').trim() || mc.checkName || 'Mangel';
+    var zust = String(mc.zustaendig || '').replace(/\s+/g, ' ').trim();
+    var massn = mangelMassnahme(mc).replace(/\s+/g, ' ');
+    return '- ' + text + ' | Zuständig: ' + (zust || 'noch offen') +
+      ' | Stand: ' + (massn || 'noch offen' + (mc.uebernommen && mc.uebernommenSeit ? ' seit ' + fmtDate(mc.uebernommenSeit) : '')) +
+      (mc.frist ? ' | Frist: ' + fmtDate(mc.frist) : '') +
+      (mangelHinweisGL(mc) ? '\n  Entscheidung nötig: ' + mangelHinweisGL(mc) : '');
+  });
+  return {
+    wichtig: wichtig, zeilen: zeilen, rest: offen.length - wichtig.length,
+    bedenken: wichtig.filter(function(m) { return m.bedenken; }).length,
+    eskalation: wichtig.filter(function(m) { return m.bedenken || m.dringlichkeit === 'kritisch'; }).length,
+    entscheidung: wichtig.filter(function(m) { return mangelHinweisGL(m); }).length,
+    fristen: wichtig.filter(function(m) { return m.frist; }).map(function(m) { return m.frist; }).sort()
+  };
+}
 function protokollMailText(insp, ziel, mitAnhang) {
   var c = inspCounts(insp);
   var liste = protokollListeText(insp);
@@ -6049,16 +6082,34 @@ function protokollMailText(insp, ziel, mitAnhang) {
   var subject, body;
   if (ziel === 'gl') {
     subject = 'Begehungsprotokoll ' + insp.standort + ' ' + fmtDate(insp.datum) + (bedenken.length ? ' – Bedenkenanzeige' : '');
+    // Geschäftsleitung (05.11.2026): oben nur das Wichtige, der Rest als Anzahl „zur Information“
+    var gb = protokollGlBloecke(insp);
+    var block1 = '', block2 = '';
+    if (gb.zeilen.length) {
+      var titel1 = gb.eskalation ? 'BEDENKEN, ICH BITTE UM EINGANGSBESTÄTIGUNG UND ZEITPLAN' : (du ? 'DEINE ENTSCHEIDUNG IST NÖTIG' : 'EURE ENTSCHEIDUNG IST NÖTIG');
+      block1 = titel1 + '\n\n' + gb.zeilen.join('\n\n') + '\n\n' +
+        (gb.bedenken ? 'Gegen ' + (gb.bedenken === 1 ? 'einen Mangel' : gb.bedenken + ' Mängel') + ' habe ich sicherheitstechnische Bedenken. Die Bedenkenanzeige ist Teil des PDFs. ' : '') +
+        (gb.eskalation ? (du ? 'Bitte bestätige mir kurz den Eingang und teile mir den Zeitplan zur Beseitigung mit.' : 'Bitte bestätigt mir kurz den Eingang und teilt mir den Zeitplan zur Beseitigung mit.') : '') +
+        (gb.entscheidung ? (gb.eskalation ? ' ' : '') + (du ? 'Bei den Punkten mit „Entscheidung nötig“ brauche ich deine Entscheidung.' : 'Bei den Punkten mit „Entscheidung nötig“ brauche ich eure Entscheidung.') : '') +
+        '\n\n';
+    }
+    if (gb.rest) {
+      var einz = gb.rest === 1;
+      block2 = (du ? 'ZUR INFORMATION, DU MUSST DAZU NICHTS TUN' : 'ZUR INFORMATION, IHR MÜSST DAZU NICHTS TUN') + '\n\n' +
+        (gb.zeilen.length
+          ? 'Außerdem ' + (einz ? 'ist 1 weiterer Mangel offen, um den' : 'sind ' + gb.rest + ' weitere Mängel offen, um die')
+          : (einz ? 'Es ist 1 Mangel offen, um den' : 'Es sind ' + gb.rest + ' Mängel offen, um die')) +
+        ' sich die Technik kümmert. Details stehen im PDF. ' +
+        (du ? 'Die Punkte unter „Zur Information“ erledigt die Technik, dazu brauche ich nichts von dir.' : 'Die Punkte unter „Zur Information“ erledigt die Technik, dazu brauche ich nichts von euch.') + '\n\n';
+    }
     body = anrede + ',\n\n' +
-      'am ' + fmtDate(insp.datum) + ' habe ich die Brandschutzbegehung in ' + insp.standort + ' gemacht. ' +
-      (c.offen ? 'Offen sind ' + c.offen + (c.offen === 1 ? ' Mangel' : ' Mängel') + (c.kritisch ? ', davon ' + c.kritisch + ' kritisch' : '') + ':' : 'Es sind keine Mängel offen.') + '\n\n' +
-      (c.offen ? listeBlock : '') +
-      (bedenken.length
-        ? 'Gegen ' + (bedenken.length === 1 ? 'einen Mangel' : bedenken.length + ' Mängel') + ' habe ich sicherheitstechnische Bedenken. Die Bedenkenanzeige ist Teil des PDFs. ' +
-          (du ? 'Bitte bestätige mir kurz den Eingang und teile mir den Zeitplan zur Beseitigung mit.' : 'Bitte bestätigt mir kurz den Eingang und teilt mir den Zeitplan zur Beseitigung mit.') + '\n\n'
-        : '') +
-      anhang + (du ? ' Meld dich gerne, falls du Fragen hast.' : ' Meldet euch gerne, falls ihr Fragen habt.') +
+      'am ' + fmtDate(insp.datum) + ' habe ich die Brandschutzbegehung in ' + insp.standort + ' gemacht. ' + anhang + '\n\n' +
+      (c.offen ? block1 + block2 : 'Es sind keine Mängel offen.\n\n') +
+      (du ? 'Meld dich gerne, falls du Fragen hast.' : 'Meldet euch gerne, falls ihr Fragen habt.') +
       '\n\nViele Grüße' + (S.signatur ? '\n\n' + S.signatur : '');
+    // Nachfassen: früheste Frist der wichtigen Punkte; nur zur Information: keine eigene Frist (Server nimmt 7 Tage)
+    fristen = gb.eskalation || gb.entscheidung ? gb.fristen : [];
+    var glInfo = !gb.zeilen.length;
   } else {
     // Centerleitung (05.11.2026): klarstellen, dass ich bzw. die Technik uns kümmern; Hinweise nur, wenn eingetragen
     var clListe = protokollClListeText(insp);
@@ -6074,7 +6125,8 @@ function protokollMailText(insp, ziel, mitAnhang) {
       (du ? 'Wenn dir im Haus etwas dazu auffällt, sag mir bitte Bescheid.' : 'Wenn euch im Haus etwas dazu auffällt, sagt mir bitte Bescheid.') +
       '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   }
-  return { an: an, cc: cc, name: name, anrede: anrede, form: du ? 'du' : 'ihr', subject: subject, body: body, frist: fristen[0] || '' };
+  return { an: an, cc: cc, name: name, anrede: anrede, form: du ? 'du' : 'ihr', subject: subject, body: body, frist: fristen[0] || '',
+    nurInfo: ziel === 'gl' ? !!glInfo : false, glWichtig: ziel === 'gl' ? gb.zeilen.length : 0, glRest: ziel === 'gl' ? gb.rest : 0 };
 }
 function protokollMailto(mt) {
   return 'mailto:' + mt.an + '?' + (mt.cc ? 'cc=' + encodeURIComponent(mt.cc) + '&' : '') + 'subject=' + encodeURIComponent(mt.subject) + '&body=' + encodeURIComponent(mt.body);
@@ -6392,7 +6444,7 @@ function doProtokollEntwurf(ziel) {
         method: 'POST', signal: ac ? ac.signal : undefined,
         headers: { 'Authorization': 'Bearer ' + S.srvKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ an: mt.an, cc: mt.cc, betreff: mt.subject, text: mt.body, dateiname: d.dateiname, pdf: b64,
-          frist: mt.frist, anrede: mt.anrede, form: mt.form === 'du' ? 'du' : 'sie', zusatz: ziel === 'gl' ? 'Begehungsprotokoll an Geschäftsleitung' : 'Begehungsprotokoll an Centerleitung' })
+          frist: mt.frist, anrede: mt.anrede, form: mt.form === 'du' ? 'du' : 'sie', zusatz: ziel === 'gl' ? 'Begehungsprotokoll an Geschäftsleitung' + (mt.nurInfo ? ' (nur zur Information)' : '') : 'Begehungsprotokoll an Centerleitung' })
       }).then(function(r) {
         if (uhr) clearTimeout(uhr);
         return r.json().catch(function() { return {}; }).then(function(res) {
