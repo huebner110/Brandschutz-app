@@ -1508,9 +1508,7 @@ function mangelAnstossMail(it) {
   if (z.length >= 4 && !/^(thomas|hübi|haustechnik)/.test(z)) (S.kontakte || []).forEach(function(k) { if (k.email && k.name && String(k.name).toLowerCase().indexOf(z) >= 0) tr.push(k.email); });
   if (tr.length === 1) an = tr[0];
   if (!an) an = centerleiterEmailFor(it.insp.standort);
-  var st = mangelLetzterStand(m);
   var body = 'Hallo,\n\nich frage kurz nach dem Stand zu diesem Punkt in ' + it.insp.standort + ':\n\n' + mangelTitel(m) +
-    (st ? '\nLetzter Stand: ' + st : '') + (m.frist ? '\nFrist: ' + fmtDate(m.frist) : '') +
     '\n\nWie ist der Stand, und bis wann wird es erledigt?\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   return { an: an, subject: 'Stand: ' + mangelTitel(m).slice(0, 90) + ' (' + it.insp.standort + ')', body: body };
 }
@@ -6146,7 +6144,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05h';
+var APP_STAND = '2026-11-05i';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
