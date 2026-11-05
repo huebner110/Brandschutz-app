@@ -1531,7 +1531,8 @@ function arbeitstagePlus(n) {
 function wochentagText(iso) {
   return ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][new Date(iso + 'T12:00:00').getDay()] + ', ' + fmtDate(iso).slice(0, 6);
 }
-function vornameVon(n) { return String(n || '').trim().split(/\s+/)[0]; }
+// Rufname in Klammern (ein Wort) hat Vorrang: „Beate (Bea) Muster“ wird mit „Bea“ angesprochen
+function vornameVon(n) { var r = String(n || '').match(/\(([^)\s]+)\)/); return r ? r[1] : String(n || '').trim().split(/\s+/)[0]; }
 function haustechnikerFuer(standort) {
   var r = null;
   (S.kontakte || []).forEach(function(k) { if (!r && k.standort === standort && /^haustechniker/i.test(String(k.rolle || '').trim()) && k.name) r = k; });
@@ -1578,28 +1579,29 @@ function mangelAnstossMail(it, nFotos) {
   var frist = m.frist ? fmtDate(m.frist) : '';
   var anlass = it.insp.schnellmeldung ? 'bei meinem Rundgang am ' : 'bei meiner Begehung am ';
   var hinweis = String(m.hinweisCL || '').replace(/\s+/g, ' ').trim();
+  var empf = f.fall === 'B' && f.extern ? f.extern : cl;  // Empfänger-Kontakt für die Anrede
+  var gruss1 = du ? (empf && empf.name ? 'Hallo ' + vornameVon(empf.name) + ',' : 'Hallo,') : 'Guten Tag,';
   var gruss = '\n\nBeste Grüße' + (S.grussName ? '\n' + S.grussName : '') + (S.signatur ? '\n\n' + S.signatur : '');
   var kein = '', body, subject;
   if (nachfrage) {
     var wann = vorg && vorg.gesendet ? fmtDate(vorg.gesendet) : 'neulich';
     subject = 'Stand: ' + kurz + ' (' + standort + ')';
     if (f.fall === 'A' && htSelbst) kein = 'Der Haustechniker bei diesem Mangel bist du selbst. Eine Nachfrage an die Centerleitung ist hier nicht nötig. Die Erinnerung bleibt als Nachfassen auf der Karte stehen.';
-    body = (du ? 'Hallo,' : 'Guten Tag,') + '\n\nich ' + (du ? 'hatte dir' : 'hatte Ihnen') + ' am ' + wann + ' zu folgendem Mangel in ' + standort + ' geschrieben:\n\n' + angaben +
-      '\n\n' + (f.fall === 'A' ? 'Wie ist der Stand' + (htName ? ', ist ' + htName + ' schon dran' : '') + ', und bis wann wird es erledigt?'
-                : 'Wie ist der Stand, und bis wann wird es erledigt?') + gruss;
+    body = gruss1 + '\n\nich wollte kurz nachhaken: Am ' + wann + ' hatte ich ' + (du ? 'dir' : 'Ihnen') + ' zu folgendem Punkt in ' + standort + ' geschrieben:\n\n' + angaben + '\n\n' +
+      (f.fall === 'A' ? 'Gibt es schon etwas Neues' + (htName ? '? Ist ' + htName + ' schon dran' : '') + ', und bis wann klappt es ungefähr?'
+                      : 'Gibt es schon etwas Neues, und bis wann klappt es ungefähr?') + '\n\n' + (du ? 'Danke dir!' : 'Vielen Dank!') + gruss;
   } else {
     subject = 'Mangel in ' + standort + ': ' + kurz;
+    var einstieg = gruss1 + '\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir etwas aufgefallen:\n\n' + angaben + '\n\n';
     if (f.fall === 'A' && htSelbst) {
-      body = 'Hallo,\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
-        '\n\nIch kümmere mich selbst darum' + (frist ? ', geplant bis ' + frist : '') + '. Du musst nichts veranlassen.' + (hinweis ? '\n\nBitte beachten: ' + hinweis : '') + gruss;
+      body = einstieg + 'Ich kümmere mich selbst darum' + (frist ? ' (geplant bis ' + frist + ')' : '') + '. Du musst nichts veranlassen, ich wollte dich nur kurz informieren.' + (hinweis ? '\n\nEine Bitte noch: ' + hinweis : '') + gruss;
     } else if (f.fall === 'A') {
-      body = 'Hallo,\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
-        '\n\nBitte gib das an euren Haustechniker' + (htName ? ' ' + htName : '') + ' weiter' + (cc ? ' (er steht in Kopie)' : '') + '. Er soll es ' + (frist ? 'bis ' + frist + ' ' : '') +
-        'erledigen. Gib mir bitte bis ' + wochentagText(nachfass) + ' kurz Rückmeldung, wer es macht und bis wann es erledigt wird.' + (hinweis ? '\n\nBitte beachten: ' + hinweis : '') + gruss;
+      body = einstieg + 'Könntest du das bitte an euren Haustechniker' + (htName ? ' ' + htName : '') + ' weitergeben' + (cc ? ' (er steht in Kopie)' : '') + '? ' +
+        (frist ? 'Es wäre super, wenn er es bis ' + frist + ' erledigen kann. ' : '') + 'Gib mir doch bitte bis ' + wochentagText(nachfass) + ' kurz Bescheid, wer es übernimmt und bis wann es klappt.' +
+        (hinweis ? '\n\nEine Bitte noch: ' + hinweis : '') + '\n\nDanke dir!' + gruss;
     } else {
-      body = (du ? 'Hallo,' : 'Guten Tag,') + '\n\n' + anlass + fmtDate(it.insp.datum) + ' in ' + standort + ' ist mir folgender Mangel aufgefallen:\n\n' + angaben +
-        '\n\n' + (du ? 'Bitte erledige ihn' : 'Bitte erledigen Sie ihn') + (frist ? ' bis ' + frist : '') + ' und ' + (du ? 'gib mir' : 'geben Sie mir') + ' bis ' + wochentagText(nachfass) +
-        ' kurz Rückmeldung, wie ' + (du ? 'du' : 'Sie') + ' vorgehen.' + gruss;
+      body = einstieg + (du ? 'Kannst du dich bitte darum kümmern' : 'Könnten Sie sich bitte darum kümmern') + '? ' + (frist ? 'Es wäre super, wenn es bis ' + frist + ' erledigt wäre. ' : '') +
+        (du ? 'Sag mir doch bitte bis ' : 'Geben Sie mir doch bitte bis ') + wochentagText(nachfass) + ' kurz Bescheid, wie ' + (du ? 'du' : 'Sie') + ' vorgehen.' + '\n\n' + (du ? 'Danke dir!' : 'Vielen Dank!') + gruss;
     }
   }
   return { an: an, cc: cc, subject: subject, body: body, nachfass: nachfass, art: nachfrage ? 'nachfrage' : 'erst', fall: f.fall,
@@ -6258,7 +6260,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05m';
+var APP_STAND = '2026-11-05n';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
