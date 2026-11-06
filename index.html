@@ -2918,6 +2918,7 @@ function vorschlagVerwerfen(vid) {
    im Abgleich, Postfenster). Thomas hakt sie ab, der Haken geht an den Server zurück, damit der
    nächste Zettel Erledigtes nicht wiederholt. Texte stammen aus Mails, deshalb immer escH. */
 var TAG_ARTEN = [
+  { art: 'maengel', titel: 'Mängel heute (1 bis 3)' },
   { art: 'anruf', titel: 'Anrufe' },
   { art: 'diktat', titel: 'Zum Diktieren (per Siri „Auftrag: …“)' },
   { art: 'freigabe', titel: 'Freigeben (Entwürfe in Mail)' },
@@ -6260,7 +6261,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-05o';
+var APP_STAND = '2026-11-06a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
