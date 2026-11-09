@@ -2977,7 +2977,8 @@ function vMeinTag() {
           : '<button class="tag-haken' + (p.erledigt ? ' an' : '') + '" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="' + (p.erledigt ? 'Haken entfernen' : 'Abhaken') + '">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
         // Kurzinfo „Stand / Du“ vom Fahrt-Zettel: klappt beim Antippen des Punkts auf (seit 03.11.2026)
-        var info = TAG_INFO && p.info ? String(p.info) : '', infoAuf = info && S.tagInfoOffen === p.id;
+        // Jeder Punkt klappt auf (Wunsch Thomas 09.11.2026). Fehlt das Feld info, zeigt der Kasten den Text und einen Hinweis.
+        var info = TAG_INFO ? (p.info ? String(p.info) : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
           '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
@@ -6261,7 +6262,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-09a';
+var APP_STAND = '2026-11-09b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
