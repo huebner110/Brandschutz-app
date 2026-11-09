@@ -6162,7 +6162,7 @@ function protokollDokument(opt) {
       '<h2 style="font-size:11pt;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #D5DBDB">Festgestellte Mängel mit Bedenkenanzeige</h2>' +
       kurzTabelleHtml(bedenkenMaengel, insp, checks) +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung der genannten Mängel und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung der aufgeführten Mängel die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
-      '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
+      '<p style="font-size:9pt;margin-top:10px">Bitte bestätige den Erhalt dieser Bedenkenanzeige schriftlich. Den Zeitplan zur Mängelbeseitigung meldet die Technik zurück.</p>' +
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">' + insp.begeher + ', Brandschutzbeauftragter &middot; ' + fmtDate(insp.datum) + '</div></div>' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">Geschäftsführung &middot; Datum / Unterschrift</div></div>' +
@@ -6261,7 +6261,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-06a';
+var APP_STAND = '2026-11-09a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -6359,10 +6359,10 @@ function protokollMailText(insp, ziel, mitAnhang) {
     var gb = protokollGlBloecke(insp);
     var block1 = '', block2 = '';
     if (gb.zeilen.length) {
-      var titel1 = gb.eskalation ? 'BEDENKEN, ICH BITTE UM EINGANGSBESTÄTIGUNG UND ZEITPLAN' : (du ? 'DEINE ENTSCHEIDUNG IST NÖTIG' : 'EURE ENTSCHEIDUNG IST NÖTIG');
+      var titel1 = gb.eskalation ? 'BEDENKEN, ICH BITTE UM EINGANGSBESTÄTIGUNG' : (du ? 'DEINE ENTSCHEIDUNG IST NÖTIG' : 'EURE ENTSCHEIDUNG IST NÖTIG');
       block1 = titel1 + '\n\n' + gb.zeilen.join('\n\n') + '\n\n' +
         (gb.bedenken ? 'Gegen ' + (gb.bedenken === 1 ? 'einen Mangel' : gb.bedenken + ' Mängel') + ' habe ich sicherheitstechnische Bedenken. Die Bedenkenanzeige ist Teil des PDFs. ' : '') +
-        (gb.eskalation ? (du ? 'Bitte bestätige mir kurz den Eingang und teile mir den Zeitplan zur Beseitigung mit.' : 'Bitte bestätigt mir kurz den Eingang und teilt mir den Zeitplan zur Beseitigung mit.') : '') +
+        (gb.eskalation ? (du ? 'Bitte bestätige mir kurz den Eingang. Den Zeitplan zur Beseitigung meldet die Technik an uns beide zurück.' : 'Bitte bestätigt mir kurz den Eingang. Den Zeitplan zur Beseitigung meldet die Technik an uns zurück.') : '') +
         (gb.entscheidung ? (gb.eskalation ? ' ' : '') + (du ? 'Bei den Punkten mit „Entscheidung nötig“ brauche ich deine Entscheidung.' : 'Bei den Punkten mit „Entscheidung nötig“ brauche ich eure Entscheidung.') : '') +
         '\n\n';
     }
@@ -6849,7 +6849,7 @@ function schnellmangelDokument() {
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       fotosEx + '</div></div>' +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung des genannten Mangels und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung des aufgeführten Mangels die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
-      '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
+      '<p style="font-size:9pt;margin-top:10px">Bitte bestätige den Erhalt dieser Bedenkenanzeige schriftlich. Den Zeitplan zur Mängelbeseitigung meldet die Technik zurück.</p>' +
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">' + insp.begeher + ', Brandschutzbeauftragter &middot; ' + fmtDate(insp.datum) + '</div></div>' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">Geschäftsführung &middot; Datum / Unterschrift</div></div>' +
