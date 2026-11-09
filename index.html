@@ -283,6 +283,11 @@
     .tag-liste .t.tag-info-an { cursor: pointer; }
     .tag-info-pfeil { color: var(--primary); display: inline !important; }
     .tag-liste .t .tag-info { display: block; margin-top: 6px; padding: 8px 10px; background: var(--band); border-left: 3px solid var(--primary); font-size: 13.5px; line-height: 1.45; color: var(--text); white-space: normal; }
+    .tag-liste .t .tag-teile { display: block; margin-top: 8px; }
+    .tag-liste .t .tag-teil { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid var(--border); padding: 9px 2px; font-family: inherit; font-size: 13.5px; color: var(--text); cursor: pointer; }
+    .tag-liste .t .tag-teil-box { flex: 0 0 22px; height: 22px; border-radius: 6px; border: 2px solid var(--text-light); display: inline-flex; align-items: center; justify-content: center; color: transparent; font-weight: 700; }
+    .tag-liste .t .tag-teil.an { color: var(--text-light); text-decoration: line-through; }
+    .tag-liste .t .tag-teil.an .tag-teil-box { background: var(--ok); border-color: var(--ok); color: #fff; }
     .tag-auftrag-knopf.an { background: var(--primary); border-color: var(--primary); color: #fff; }
     .tag-auftrag-knopf { border: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 5px 10px; white-space: nowrap; }
     .tag-liste li.tag-auftrag-form { display: block; background: var(--band); cursor: default; }
@@ -2978,11 +2983,14 @@ function vMeinTag() {
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
         // Kurzinfo „Stand / Du“ vom Fahrt-Zettel: klappt beim Antippen des Punkts auf (seit 03.11.2026)
         // Jeder Punkt klappt auf (Wunsch Thomas 09.11.2026). Fehlt das Feld info, zeigt der Kasten den Text und einen Hinweis.
-        var info = TAG_INFO ? (p.info ? String(p.info) : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
+        // Themen zum Abhaken (Feld teile: [{text, erledigt}], seit 09.11.2026): klappen mit auf, Fortschritt am Titel
+        var teile = Array.isArray(p.teile) ? p.teile.filter(function(t) { return t && t.text; }) : [], teileFertig = teile.filter(function(t) { return t.erledigt; }).length;
+        var info = TAG_INFO ? (p.info ? String(p.info) : teile.length ? 'Themen zum Abhaken:' : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
-          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
-          (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + '</span>' : '') + auftragZeile +
+          (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + (teile.length ? '<span class="tag-teile">' + teile.map(function(t, i) {
+            return '<button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>'; }).join('') + '</span>' : '') + '</span>' : '') + auftragZeile +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
           (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
@@ -3119,6 +3127,18 @@ function tagNummerKopieren(el, nr) {
   var fertig = function() { el.textContent = 'Kopiert'; setTimeout(function() { el.textContent = 'Kopieren'; }, 2000); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(nr).then(fertig, function() { prompt('Nummer kopieren:', nr); });
   else prompt('Nummer kopieren:', nr);
+}
+
+// Ein Thema eines Punkts abhaken (Feld teile). Sind alle abgehakt, ist der Punkt erledigt, sonst wieder offen.
+function tagespunktTeil(tid, i) {
+  var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
+  if (!p || !Array.isArray(p.teile) || !p.teile[i]) return;
+  p.teile[i].erledigt = !p.teile[i].erledigt;
+  var alle = p.teile.filter(function(t) { return t && t.text; });
+  p.erledigt = alle.length > 0 && alle.every(function(t) { return t.erledigt; });
+  p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
+  save();
+  render();
 }
 
 function tagespunktHaken(tid) {
@@ -5115,6 +5135,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'tag-mikro') { tagMikro(); return; }
   if (a.action === 'tag-auftrag-abbrechen') { if (tagErkennung) tagErkennung.stop(); S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-auftrag-senden') { var ta = document.getElementById('tag-auftrag-text'); if (ta) S.tagAuftragText = ta.value; tagAuftragSenden(a.tid); return; }
+  if (a.action === 'tag-teil') { tagespunktTeil(a.tid, parseInt(a.idx, 10)); return; }
   if (a.action === 'tag-info') { S.tagInfoOffen = S.tagInfoOffen === a.tid ? null : a.tid; render(); return; }
   if (a.action === 'tag-verschieben') { S.tagVerschiebenOffen = S.tagVerschiebenOffen === a.tid ? null : a.tid; S.tagVerschiebenAuf = ''; S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-verschieben-tag') { var tt = document.getElementById('tag-auftrag-text'); if (tt) S.tagAuftragText = tt.value; S.tagVerschiebenAuf = a.tag; render(); return; }
@@ -6262,7 +6283,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-09b';
+var APP_STAND = '2026-11-09c';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
