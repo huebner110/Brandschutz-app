@@ -266,6 +266,13 @@
     .lb-todo .t b { display: block; font-size: 14px; }
     .lb-todo .t span { display: block; font-size: 12.5px; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tag-liste li { cursor: default; }
+    /* Handy-Ansicht (09.11.2026): Text über volle Breite, Knöpfe darunter, kurzer Titel, Details hinter „Mehr“ */
+    .tag-liste li { grid-template-columns: auto minmax(0, 1fr); align-items: start; row-gap: 8px; }
+    .tag-liste li > .t { grid-column: 2; }
+    .tag-liste li > .tag-rechts { grid-column: 2; justify-self: start; }
+    .tag-liste .t b { font-size: 15px; line-height: 1.3; }
+    .tag-liste .t > span:not(.tag-info):not(.auftrag) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow: hidden; }
+    .tag-mehr { display: inline-block !important; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--primary) !important; }
     .tag-haken { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--text-light); background: none; color: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
     .tag-haken.an { background: var(--ok); border-color: var(--ok); color: #fff; }
     .tag-liste li.erledigt .t b { text-decoration: line-through; color: var(--text-light); }
@@ -2970,8 +2977,9 @@ function vMeinTag() {
         // Thomas telefoniert über die 3CX-App: Nummer kopieren und dort einfügen
         var rechts = g.art === 'anruf' && nummer.length >= 6 ? '<button class="tag-anruf" data-action="tag-nummer" data-nr="' + nummer + '">Kopieren</button>'
           : g.art === 'anruf' ? '<span class="lb-pill warn">Nummer fehlt</span>' : '';
+        if (rechts) rechts = '<span class="tag-rechts">' + rechts + '</span>';
         var verschiebbar = TAG_VERSCHIEBEN && tagIstBegehung(p) && !p.erledigt && !(p.verschiebenAuf && p.auftragStatus !== 'rueckfrage');
-        if (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt) rechts = '<span style="display:flex;gap:6px;align-items:center">' + rechts +
+        if (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt) rechts = '<span class="tag-rechts" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + rechts.replace(/^<span class="tag-rechts">|<\/span>$/g, '') +
           (verschiebbar ? '<button class="tag-auftrag-knopf" data-action="tag-verschieben" data-tid="' + escH(p.id) + '">↷ Verschieben</button>'
             : '<button class="tag-auftrag-knopf" data-action="tag-auftrag" data-tid="' + escH(p.id) + '">' + (g.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + '</button>') + '</span>';
         var auftragZeile = !TAG_AUFTRAG || !p.auftrag ? '' : '<span class="auftrag">' + (p.verschiebenAuf ? 'Verschieben auf ' + fmtDate(p.verschiebenAuf) : (p.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + ': ' + escH(p.auftrag)) + ' · ' +
@@ -2987,8 +2995,9 @@ function vMeinTag() {
         var teile = Array.isArray(p.teile) ? p.teile.filter(function(t) { return t && t.text; }) : [], teileFertig = teile.filter(function(t) { return t.erledigt; }).length;
         var info = TAG_INFO ? (p.info ? String(p.info) : teile.length ? 'Themen zum Abhaken:' : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
-          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + escH(p.titel) + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
+          (info ? '<span class="tag-mehr">' + (infoAuf ? 'Weniger ▴' : 'Mehr ▾') + '</span>' : '') +
           (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + (teile.length ? '<span class="tag-teile">' + teile.map(function(t, i) {
             return '<button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>'; }).join('') + '</span>' : '') + '</span>' : '') + auftragZeile +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
@@ -6283,7 +6292,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-09c';
+var APP_STAND = '2026-11-09d';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
