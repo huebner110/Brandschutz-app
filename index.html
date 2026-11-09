@@ -2999,7 +2999,7 @@ function vMeinTag() {
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
           (info ? '<span class="tag-mehr">' + (infoAuf ? 'Weniger ▴' : 'Mehr ▾') + '</span>' : '') +
           (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + (teile.length ? '<span class="tag-teile">' + teile.map(function(t, i) {
-            return '<button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>'; }).join('') + '</span>' : '') + '</span>' : '') + auftragZeile +
+            return '<button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>'; }).join('') + '</span>' : '') + (auftragZeile ? '<span class="tag-ergebnis">' + auftragZeile + '</span>' : '') + '</span>' : '') + (info ? '' : auftragZeile) +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
           (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
@@ -6292,7 +6292,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-09d';
+var APP_STAND = '2026-11-09e';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
