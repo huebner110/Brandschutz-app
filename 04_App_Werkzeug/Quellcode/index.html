@@ -266,6 +266,13 @@
     .lb-todo .t b { display: block; font-size: 14px; }
     .lb-todo .t span { display: block; font-size: 12.5px; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tag-liste li { cursor: default; }
+    /* Handy-Ansicht (09.11.2026): Text über volle Breite, Knöpfe darunter, kurzer Titel, Details hinter „Mehr“ */
+    .tag-liste li { grid-template-columns: auto minmax(0, 1fr); align-items: start; row-gap: 8px; }
+    .tag-liste li > .t { grid-column: 2; }
+    .tag-liste li > .tag-rechts { grid-column: 2; justify-self: start; }
+    .tag-liste .t b { font-size: 15px; line-height: 1.3; }
+    .tag-liste .t > span:not(.tag-info):not(.auftrag) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow: hidden; }
+    .tag-mehr { display: inline-block !important; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--primary) !important; }
     .tag-haken { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--text-light); background: none; color: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
     .tag-haken.an { background: var(--ok); border-color: var(--ok); color: #fff; }
     .tag-liste li.erledigt .t b { text-decoration: line-through; color: var(--text-light); }
@@ -283,6 +290,11 @@
     .tag-liste .t.tag-info-an { cursor: pointer; }
     .tag-info-pfeil { color: var(--primary); display: inline !important; }
     .tag-liste .t .tag-info { display: block; margin-top: 6px; padding: 8px 10px; background: var(--band); border-left: 3px solid var(--primary); font-size: 13.5px; line-height: 1.45; color: var(--text); white-space: normal; }
+    .tag-liste .t .tag-teile { display: block; margin-top: 8px; }
+    .tag-liste .t .tag-teil { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid var(--border); padding: 9px 2px; font-family: inherit; font-size: 13.5px; color: var(--text); cursor: pointer; }
+    .tag-liste .t .tag-teil-box { flex: 0 0 22px; height: 22px; border-radius: 6px; border: 2px solid var(--text-light); display: inline-flex; align-items: center; justify-content: center; color: transparent; font-weight: 700; }
+    .tag-liste .t .tag-teil.an { color: var(--text-light); text-decoration: line-through; }
+    .tag-liste .t .tag-teil.an .tag-teil-box { background: var(--ok); border-color: var(--ok); color: #fff; }
     .tag-auftrag-knopf.an { background: var(--primary); border-color: var(--primary); color: #fff; }
     .tag-auftrag-knopf { border: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 5px 10px; white-space: nowrap; }
     .tag-liste li.tag-auftrag-form { display: block; background: var(--band); cursor: default; }
@@ -1345,7 +1357,7 @@ function heuteZuTunListe() {
     sub: 'prüfen und als Direktmeldung übernehmen', rechts: 'neu', action: 'go-vorschlaege' });
   var nt = offeneTagespunkte().length;
   if (nt) items.push({ prio: 0, tage: 0, icon: 'begehung', ton: 'warn', titel: 'Mein Tag: ' + nt + (nt === 1 ? ' Punkt' : ' Punkte') + ' offen',
-    sub: 'Anrufe und Freigaben vom Fahrt-Zettel abhaken', rechts: 'heute', action: 'go-tag' });
+    sub: 'Anrufe, Freigaben und Mängel für heute abhaken', rechts: 'heute', action: 'go-tag' });
   var nu = ueberfaelligeVorgaenge().length;
   if (nu) items.push({ prio: 1, tage: 0, icon: 'mail', ton: 'crit', titel: nu + (nu === 1 ? ' Mail-Vorgang' : ' Mail-Vorgänge') + ' ohne Antwort',
     sub: 'Frist vorbei, Erinnerung kommt werktags 8:30', rechts: 'überfällig', action: 'go-vorgaenge' });
@@ -2917,14 +2929,14 @@ function vorschlagVerwerfen(vid) {
    Der Server legt um 8:05, 12:25 und 15:40 die Punkte des Fahrt-Zettels an (Bereich tagespunkte
    im Abgleich, Postfenster). Thomas hakt sie ab, der Haken geht an den Server zurück, damit der
    nächste Zettel Erledigtes nicht wiederholt. Texte stammen aus Mails, deshalb immer escH. */
+// Gruppen (seit 10.11.2026): Diktat, Rückfragen und Hirschgarten stehen zusammen unter „Zu klären“, Punkte mit
+// art hirschgarten tragen den Hinweis „braucht Mac“. Die Art im Datensatz bleibt unverändert (Server, Zettel).
 var TAG_ARTEN = [
-  { art: 'maengel', titel: 'Mängel heute (1 bis 3)' },
-  { art: 'anruf', titel: 'Anrufe' },
-  { art: 'diktat', titel: 'Zum Diktieren (per Siri „Auftrag: …“)' },
-  { art: 'freigabe', titel: 'Freigeben (Entwürfe in Mail)' },
-  { art: 'rueckfrage', titel: 'Rückfragen an dich' },
-  { art: 'hirschgarten', titel: 'Hirschgarten (wartet bis zum Mac)' },
-  { art: 'termin', titel: 'Heute wichtig' }
+  { art: 'maengel', arten: ['maengel'], titel: 'Mängel heute (1 bis 3)' },
+  { art: 'anruf', arten: ['anruf'], titel: 'Anrufe' },
+  { art: 'freigabe', arten: ['freigabe'], titel: 'Freigeben (Entwürfe in Mail)' },
+  { art: 'diktat', arten: ['diktat', 'rueckfrage', 'hirschgarten'], titel: 'Zu klären' },
+  { art: 'termin', arten: ['termin'], titel: 'Fristen und Begehungen' }
 ];
 // Begehung heute nicht geschafft: Knopf „Verschieben“ mit neuem Tag (nur Mo bis Do). Geht als Auftrag an den
 // Server, der den Kalendertermin verschiebt und den Punkt abhakt (seit 03.11.2026). Zum Abschalten false.
@@ -2949,12 +2961,16 @@ function vMeinTag() {
   var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id && p.art !== 'kalender'; })
     .sort(function(a, b) { return (a.nr || 0) - (b.nr || 0); });
   var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
-  var sub = neuester.erstellt ? 'Fahrt-Zettel ' + (FENSTER_NAME[neuester.fenster] || '') + ', ' + fmtDate(neuester.datum) + ' ' + escH(neuester.zeit || '') : 'noch kein Fahrt-Zettel';
+  // Kopfzeile: heutiger Tag und Stand = jüngste Änderung (neuer Zettel oder Haken, auch vom Server), seit 10.11.2026
+  var jetztD = new Date(), heuteLokal = jetztD.getFullYear() + '-' + ('0' + (jetztD.getMonth() + 1)).slice(-2) + '-' + ('0' + jetztD.getDate()).slice(-2);
+  var standMs = alle.reduce(function(m, p) { return Math.max(m, Date.parse(p.erstellt || '') || 0, Date.parse(p.erledigtAm || '') || 0); }, 0);
+  var sub = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][jetztD.getDay()] + ', ' + fmtDate(heuteLokal) +
+    (standMs ? ' · Stand ' + ('0' + new Date(standMs).getHours()).slice(-2) + ':' + ('0' + new Date(standMs).getMinutes()).slice(-2) : '');
   var html = '';
   // Abgehaktes verschwindet aus der Liste (Wunsch Thomas), bleibt aber gespeichert und lässt sich einblenden
   var nErledigt = alle.filter(function(p) { return p.erledigt; }).length;
   TAG_ARTEN.forEach(function(g) {
-    var punkte = alle.filter(function(p) { return p.art === g.art && (S.tagErledigtZeigen || !p.erledigt); });
+    var punkte = alle.filter(function(p) { return g.arten.indexOf(p.art) >= 0 && !p.erledigt; });
     if (!punkte.length) return;
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
@@ -2965,8 +2981,9 @@ function vMeinTag() {
         // Thomas telefoniert über die 3CX-App: Nummer kopieren und dort einfügen
         var rechts = g.art === 'anruf' && nummer.length >= 6 ? '<button class="tag-anruf" data-action="tag-nummer" data-nr="' + nummer + '">Kopieren</button>'
           : g.art === 'anruf' ? '<span class="lb-pill warn">Nummer fehlt</span>' : '';
+        if (rechts) rechts = '<span class="tag-rechts">' + rechts + '</span>';
         var verschiebbar = TAG_VERSCHIEBEN && tagIstBegehung(p) && !p.erledigt && !(p.verschiebenAuf && p.auftragStatus !== 'rueckfrage');
-        if (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt) rechts = '<span style="display:flex;gap:6px;align-items:center">' + rechts +
+        if (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt) rechts = '<span class="tag-rechts" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + rechts.replace(/^<span class="tag-rechts">|<\/span>$/g, '') +
           (verschiebbar ? '<button class="tag-auftrag-knopf" data-action="tag-verschieben" data-tid="' + escH(p.id) + '">↷ Verschieben</button>'
             : '<button class="tag-auftrag-knopf" data-action="tag-auftrag" data-tid="' + escH(p.id) + '">' + (g.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + '</button>') + '</span>';
         var auftragZeile = !TAG_AUFTRAG || !p.auftrag ? '' : '<span class="auftrag">' + (p.verschiebenAuf ? 'Verschieben auf ' + fmtDate(p.verschiebenAuf) : (p.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + ': ' + escH(p.auftrag)) + ' · ' +
@@ -2977,18 +2994,41 @@ function vMeinTag() {
           : '<button class="tag-haken' + (p.erledigt ? ' an' : '') + '" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="' + (p.erledigt ? 'Haken entfernen' : 'Abhaken') + '">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>';
         // Kurzinfo „Stand / Du“ vom Fahrt-Zettel: klappt beim Antippen des Punkts auf (seit 03.11.2026)
-        var info = TAG_INFO && p.info ? String(p.info) : '', infoAuf = info && S.tagInfoOffen === p.id;
+        // Jeder Punkt klappt auf (Wunsch Thomas 09.11.2026). Fehlt das Feld info, zeigt der Kasten den Text und einen Hinweis.
+        // Themen zum Abhaken (Feld teile: [{text, erledigt}], seit 09.11.2026): klappen mit auf, Fortschritt am Titel
+        var teile = Array.isArray(p.teile) ? p.teile.filter(function(t) { return t && t.text; }) : [], teileFertig = teile.filter(function(t) { return t.erledigt; }).length;
+        var info = TAG_INFO ? (p.info ? String(p.info) : teile.length ? 'Themen zum Abhaken:' : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
-          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + (info ? '<span class="tag-info-pfeil">' + (infoAuf ? '▾' : '▸') + '</span> ' : '') + escH(p.titel) + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + escH(p.titel) + (p.art === 'hirschgarten' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">· braucht Mac</span>' : '') + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
-          (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + '</span>' : '') + auftragZeile +
+          (info ? '<span class="tag-mehr">' + (infoAuf ? 'Weniger ▴' : 'Mehr ▾') + '</span>' : '') +
+          (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + (teile.length ? '<span class="tag-teile">' + teile.map(function(t, i) {
+            return '<button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>'; }).join('') + '</span>' : '') + (auftragZeile ? '<span class="tag-ergebnis">' + auftragZeile + '</span>' : '') + '</span>' : '') + (info ? '' : auftragZeile) +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
           (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
       }).join('') + '</ul></div>';
   });
-  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
-  if (nErledigt) html += '<button class="btn-outline" style="width:100%" data-action="tag-erledigt-zeigen">' + (S.tagErledigtZeigen ? 'Erledigte ausblenden' : 'Erledigte zeigen (' + nErledigt + ')') + '</button>';
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen werktags um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
+  // Wartet auf Antwort (seit 10.11.2026): offene Mail-Vorgänge der Nachfass-Liste, nur zum Ansehen. Antwort da zuerst, dann nach Frist.
+  var warten = (S.vorgaenge || []).filter(function(v) { return v && v.id && !v.aktion && (v.art === 'offen' || v.art === 'antwort'); })
+    .sort(function(a, b) { return (a.art === 'antwort' ? 0 : 1) - (b.art === 'antwort' ? 0 : 1) || String(a.frist || '9').localeCompare(String(b.frist || '9')); });
+  if (warten.length) html += '<div class="lb-panel"><h2>Wartet auf Antwort <small>' + warten.length + '</small></h2><ul class="lb-todo tag-liste">' +
+    warten.slice(0, 6).map(function(v) {
+      var ueber = v.art === 'offen' && v.frist && v.frist < today();
+      return '<li><span class="t"><b>' + escH(v.betreff) + '</b><span>an ' + escH(String(v.an || '').split('@')[0].replace(/\./g, ' ')) + (v.frist ? ' · Frist ' + fmtDate(v.frist) : '') + '</span></span>' +
+        (v.art === 'antwort' ? '<span class="lb-pill ok">Antwort da</span>' : ueber ? '<span class="lb-pill crit">überfällig</span>' : '') + '</li>';
+    }).join('') + '</ul>' + (warten.length > 6 ? '<button class="btn-outline" style="width:100%" data-action="go-vorgaenge">Alle ' + warten.length + ' Mail-Vorgänge</button>' : '') + '</div>';
+  // Heute erledigt: von dir oder automatisch abgehakt, neueste zuerst. Haken antippen holt den Punkt zurück.
+  var heuteErledigt = alle.filter(function(p) { return p.erledigt && (function(d) { return d && d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) === heuteLokal; })(p.erledigtAm ? new Date(p.erledigtAm) : null); })
+    .sort(function(a, b) { return String(b.erledigtAm).localeCompare(String(a.erledigtAm)); });
+  if (heuteErledigt.length) html += '<div class="lb-panel"><h2>Heute erledigt <small>' + heuteErledigt.length + '</small></h2><ul class="lb-todo tag-liste">' +
+    heuteErledigt.map(function(p) {
+      var d = new Date(p.erledigtAm), uhr = isNaN(d) ? '' : ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      return '<li class="erledigt"><button class="tag-haken an" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="Haken entfernen">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>' +
+        '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
+    }).join('') + '</ul></div>';
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
@@ -3118,6 +3158,18 @@ function tagNummerKopieren(el, nr) {
   var fertig = function() { el.textContent = 'Kopiert'; setTimeout(function() { el.textContent = 'Kopieren'; }, 2000); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(nr).then(fertig, function() { prompt('Nummer kopieren:', nr); });
   else prompt('Nummer kopieren:', nr);
+}
+
+// Ein Thema eines Punkts abhaken (Feld teile). Sind alle abgehakt, ist der Punkt erledigt, sonst wieder offen.
+function tagespunktTeil(tid, i) {
+  var p = (S.tagespunkte || []).filter(function(x) { return x && x.id === tid; })[0];
+  if (!p || !Array.isArray(p.teile) || !p.teile[i]) return;
+  p.teile[i].erledigt = !p.teile[i].erledigt;
+  var alle = p.teile.filter(function(t) { return t && t.text; });
+  p.erledigt = alle.length > 0 && alle.every(function(t) { return t.erledigt; });
+  p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
+  save();
+  render();
 }
 
 function tagespunktHaken(tid) {
@@ -5114,6 +5166,7 @@ document.addEventListener('click', function(e) {
   if (a.action === 'tag-mikro') { tagMikro(); return; }
   if (a.action === 'tag-auftrag-abbrechen') { if (tagErkennung) tagErkennung.stop(); S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-auftrag-senden') { var ta = document.getElementById('tag-auftrag-text'); if (ta) S.tagAuftragText = ta.value; tagAuftragSenden(a.tid); return; }
+  if (a.action === 'tag-teil') { tagespunktTeil(a.tid, parseInt(a.idx, 10)); return; }
   if (a.action === 'tag-info') { S.tagInfoOffen = S.tagInfoOffen === a.tid ? null : a.tid; render(); return; }
   if (a.action === 'tag-verschieben') { S.tagVerschiebenOffen = S.tagVerschiebenOffen === a.tid ? null : a.tid; S.tagVerschiebenAuf = ''; S.tagAuftragOffen = null; S.tagAuftragText = ''; render(); return; }
   if (a.action === 'tag-verschieben-tag') { var tt = document.getElementById('tag-auftrag-text'); if (tt) S.tagAuftragText = tt.value; S.tagVerschiebenAuf = a.tag; render(); return; }
@@ -6162,7 +6215,7 @@ function protokollDokument(opt) {
       '<h2 style="font-size:11pt;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #D5DBDB">Festgestellte Mängel mit Bedenkenanzeige</h2>' +
       kurzTabelleHtml(bedenkenMaengel, insp, checks) +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung der genannten Mängel und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung der aufgeführten Mängel die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
-      '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
+      '<p style="font-size:9pt;margin-top:10px">Bitte bestätige den Erhalt dieser Bedenkenanzeige schriftlich. Den Zeitplan zur Mängelbeseitigung meldet die Technik zurück.</p>' +
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">' + insp.begeher + ', Brandschutzbeauftragter &middot; ' + fmtDate(insp.datum) + '</div></div>' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">Geschäftsführung &middot; Datum / Unterschrift</div></div>' +
@@ -6261,7 +6314,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-06a';
+var APP_STAND = '2026-11-10b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
@@ -6359,10 +6412,10 @@ function protokollMailText(insp, ziel, mitAnhang) {
     var gb = protokollGlBloecke(insp);
     var block1 = '', block2 = '';
     if (gb.zeilen.length) {
-      var titel1 = gb.eskalation ? 'BEDENKEN, ICH BITTE UM EINGANGSBESTÄTIGUNG UND ZEITPLAN' : (du ? 'DEINE ENTSCHEIDUNG IST NÖTIG' : 'EURE ENTSCHEIDUNG IST NÖTIG');
+      var titel1 = gb.eskalation ? 'BEDENKEN, ICH BITTE UM EINGANGSBESTÄTIGUNG' : (du ? 'DEINE ENTSCHEIDUNG IST NÖTIG' : 'EURE ENTSCHEIDUNG IST NÖTIG');
       block1 = titel1 + '\n\n' + gb.zeilen.join('\n\n') + '\n\n' +
         (gb.bedenken ? 'Gegen ' + (gb.bedenken === 1 ? 'einen Mangel' : gb.bedenken + ' Mängel') + ' habe ich sicherheitstechnische Bedenken. Die Bedenkenanzeige ist Teil des PDFs. ' : '') +
-        (gb.eskalation ? (du ? 'Bitte bestätige mir kurz den Eingang und teile mir den Zeitplan zur Beseitigung mit.' : 'Bitte bestätigt mir kurz den Eingang und teilt mir den Zeitplan zur Beseitigung mit.') : '') +
+        (gb.eskalation ? (du ? 'Bitte bestätige mir kurz den Eingang. Den Zeitplan zur Beseitigung meldet die Technik an uns beide zurück.' : 'Bitte bestätigt mir kurz den Eingang. Den Zeitplan zur Beseitigung meldet die Technik an uns zurück.') : '') +
         (gb.entscheidung ? (gb.eskalation ? ' ' : '') + (du ? 'Bei den Punkten mit „Entscheidung nötig“ brauche ich deine Entscheidung.' : 'Bei den Punkten mit „Entscheidung nötig“ brauche ich eure Entscheidung.') : '') +
         '\n\n';
     }
@@ -6849,7 +6902,7 @@ function schnellmangelDokument() {
       (m.zustaendig ? '<div style="margin-top:3px;font-size:8pt">Zuständig: ' + m.zustaendig + '</div>' : '') +
       fotosEx + '</div></div>' +
       '<p style="font-size:9pt;line-height:1.7;margin-top:16px">Als Brandschutzbeauftragter habe ich meine Hinweispflicht mit dieser Anzeige erfüllt. Die Verantwortung für die Beseitigung des genannten Mangels und die daraus resultierende Haftung liegt beim Betreiber. Ich weise ausdrücklich darauf hin, dass bei Nichtbehebung des aufgeführten Mangels die Betriebserlaubnis gefährdet sein kann und behördliche Maßnahmen eingeleitet werden könnten.</p>' +
-      '<p style="font-size:9pt;margin-top:10px">Bitte bestätigen Sie den Erhalt dieser Bedenkenanzeige schriftlich und teilen Sie den vorgesehenen Zeitplan zur Mängelbeseitigung mit.</p>' +
+      '<p style="font-size:9pt;margin-top:10px">Bitte bestätige den Erhalt dieser Bedenkenanzeige schriftlich. Den Zeitplan zur Mängelbeseitigung meldet die Technik zurück.</p>' +
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">' + insp.begeher + ', Brandschutzbeauftragter &middot; ' + fmtDate(insp.datum) + '</div></div>' +
       '<div style="width:220px;text-align:center"><div style="border-top:1px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:7.5pt;color:#717D7E">Geschäftsführung &middot; Datum / Unterschrift</div></div>' +

@@ -1357,7 +1357,7 @@ function heuteZuTunListe() {
     sub: 'prüfen und als Direktmeldung übernehmen', rechts: 'neu', action: 'go-vorschlaege' });
   var nt = offeneTagespunkte().length;
   if (nt) items.push({ prio: 0, tage: 0, icon: 'begehung', ton: 'warn', titel: 'Mein Tag: ' + nt + (nt === 1 ? ' Punkt' : ' Punkte') + ' offen',
-    sub: 'Anrufe und Freigaben vom Fahrt-Zettel abhaken', rechts: 'heute', action: 'go-tag' });
+    sub: 'Anrufe, Freigaben und Mängel für heute abhaken', rechts: 'heute', action: 'go-tag' });
   var nu = ueberfaelligeVorgaenge().length;
   if (nu) items.push({ prio: 1, tage: 0, icon: 'mail', ton: 'crit', titel: nu + (nu === 1 ? ' Mail-Vorgang' : ' Mail-Vorgänge') + ' ohne Antwort',
     sub: 'Frist vorbei, Erinnerung kommt werktags 8:30', rechts: 'überfällig', action: 'go-vorgaenge' });
@@ -2929,14 +2929,14 @@ function vorschlagVerwerfen(vid) {
    Der Server legt um 8:05, 12:25 und 15:40 die Punkte des Fahrt-Zettels an (Bereich tagespunkte
    im Abgleich, Postfenster). Thomas hakt sie ab, der Haken geht an den Server zurück, damit der
    nächste Zettel Erledigtes nicht wiederholt. Texte stammen aus Mails, deshalb immer escH. */
+// Gruppen (seit 10.11.2026): Diktat, Rückfragen und Hirschgarten stehen zusammen unter „Zu klären“, Punkte mit
+// art hirschgarten tragen den Hinweis „braucht Mac“. Die Art im Datensatz bleibt unverändert (Server, Zettel).
 var TAG_ARTEN = [
-  { art: 'maengel', titel: 'Mängel heute (1 bis 3)' },
-  { art: 'anruf', titel: 'Anrufe' },
-  { art: 'diktat', titel: 'Zum Diktieren (per Siri „Auftrag: …“)' },
-  { art: 'freigabe', titel: 'Freigeben (Entwürfe in Mail)' },
-  { art: 'rueckfrage', titel: 'Rückfragen an dich' },
-  { art: 'hirschgarten', titel: 'Hirschgarten (wartet bis zum Mac)' },
-  { art: 'termin', titel: 'Heute wichtig' }
+  { art: 'maengel', arten: ['maengel'], titel: 'Mängel heute (1 bis 3)' },
+  { art: 'anruf', arten: ['anruf'], titel: 'Anrufe' },
+  { art: 'freigabe', arten: ['freigabe'], titel: 'Freigeben (Entwürfe in Mail)' },
+  { art: 'diktat', arten: ['diktat', 'rueckfrage', 'hirschgarten'], titel: 'Zu klären' },
+  { art: 'termin', arten: ['termin'], titel: 'Fristen und Begehungen' }
 ];
 // Begehung heute nicht geschafft: Knopf „Verschieben“ mit neuem Tag (nur Mo bis Do). Geht als Auftrag an den
 // Server, der den Kalendertermin verschiebt und den Punkt abhakt (seit 03.11.2026). Zum Abschalten false.
@@ -2961,12 +2961,16 @@ function vMeinTag() {
   var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id && p.art !== 'kalender'; })
     .sort(function(a, b) { return (a.nr || 0) - (b.nr || 0); });
   var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
-  var sub = neuester.erstellt ? 'Fahrt-Zettel ' + (FENSTER_NAME[neuester.fenster] || '') + ', ' + fmtDate(neuester.datum) + ' ' + escH(neuester.zeit || '') : 'noch kein Fahrt-Zettel';
+  // Kopfzeile: heutiger Tag und Stand = jüngste Änderung (neuer Zettel oder Haken, auch vom Server), seit 10.11.2026
+  var jetztD = new Date(), heuteLokal = jetztD.getFullYear() + '-' + ('0' + (jetztD.getMonth() + 1)).slice(-2) + '-' + ('0' + jetztD.getDate()).slice(-2);
+  var standMs = alle.reduce(function(m, p) { return Math.max(m, Date.parse(p.erstellt || '') || 0, Date.parse(p.erledigtAm || '') || 0); }, 0);
+  var sub = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][jetztD.getDay()] + ', ' + fmtDate(heuteLokal) +
+    (standMs ? ' · Stand ' + ('0' + new Date(standMs).getHours()).slice(-2) + ':' + ('0' + new Date(standMs).getMinutes()).slice(-2) : '');
   var html = '';
   // Abgehaktes verschwindet aus der Liste (Wunsch Thomas), bleibt aber gespeichert und lässt sich einblenden
   var nErledigt = alle.filter(function(p) { return p.erledigt; }).length;
   TAG_ARTEN.forEach(function(g) {
-    var punkte = alle.filter(function(p) { return p.art === g.art && (S.tagErledigtZeigen || !p.erledigt); });
+    var punkte = alle.filter(function(p) { return g.arten.indexOf(p.art) >= 0 && !p.erledigt; });
     if (!punkte.length) return;
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
@@ -2995,7 +2999,7 @@ function vMeinTag() {
         var teile = Array.isArray(p.teile) ? p.teile.filter(function(t) { return t && t.text; }) : [], teileFertig = teile.filter(function(t) { return t.erledigt; }).length;
         var info = TAG_INFO ? (p.info ? String(p.info) : teile.length ? 'Themen zum Abhaken:' : (p.text ? String(p.text) + '\n' : '') + 'Noch keine Info zu diesem Punkt.' + (TAG_AUFTRAG && !g.ohneHaken && !p.erledigt ? ' Mit „Auftrag“ → „Stand aktualisieren“ lasse ich sie von Claude ergänzen.' : '')) : '', infoAuf = info && S.tagInfoOffen === p.id;
         return '<li class="' + (p.erledigt ? 'erledigt' : '') + '">' + haken +
-          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + escH(p.titel) + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
+          '<span class="t' + (info ? ' tag-info-an" data-action="tag-info" data-tid="' + escH(p.id) : '') + '"><b>' + escH(p.titel) + (p.art === 'hirschgarten' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">· braucht Mac</span>' : '') + (teile.length ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">(' + teileFertig + ' von ' + teile.length + ')</span>' : '') + (nummer && g.art === 'anruf' ? ' <span style="display:inline;font-weight:400;color:var(--text-light)">' + escH(p.nummer) + '</span>' : '') + '</b>' +
           (p.text ? '<span>' + escH(p.text) + '</span>' : '') +
           (info ? '<span class="tag-mehr">' + (infoAuf ? 'Weniger ▴' : 'Mehr ▾') + '</span>' : '') +
           (infoAuf ? '<span class="tag-info">' + info.split(/\n/).map(escH).join('<br>') + (teile.length ? '<span class="tag-teile">' + teile.map(function(t, i) {
@@ -3005,8 +3009,26 @@ function vMeinTag() {
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
       }).join('') + '</ul></div>';
   });
-  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Der Fahrt-Zettel kommt werktags um 8:05, 12:25 und 15:40.</div></div>';
-  if (nErledigt) html += '<button class="btn-outline" style="width:100%" data-action="tag-erledigt-zeigen">' + (S.tagErledigtZeigen ? 'Erledigte ausblenden' : 'Erledigte zeigen (' + nErledigt + ')') + '</button>';
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen werktags um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
+  // Wartet auf Antwort (seit 10.11.2026): offene Mail-Vorgänge der Nachfass-Liste, nur zum Ansehen. Antwort da zuerst, dann nach Frist.
+  var warten = (S.vorgaenge || []).filter(function(v) { return v && v.id && !v.aktion && (v.art === 'offen' || v.art === 'antwort'); })
+    .sort(function(a, b) { return (a.art === 'antwort' ? 0 : 1) - (b.art === 'antwort' ? 0 : 1) || String(a.frist || '9').localeCompare(String(b.frist || '9')); });
+  if (warten.length) html += '<div class="lb-panel"><h2>Wartet auf Antwort <small>' + warten.length + '</small></h2><ul class="lb-todo tag-liste">' +
+    warten.slice(0, 6).map(function(v) {
+      var ueber = v.art === 'offen' && v.frist && v.frist < today();
+      return '<li><span class="t"><b>' + escH(v.betreff) + '</b><span>an ' + escH(String(v.an || '').split('@')[0].replace(/\./g, ' ')) + (v.frist ? ' · Frist ' + fmtDate(v.frist) : '') + '</span></span>' +
+        (v.art === 'antwort' ? '<span class="lb-pill ok">Antwort da</span>' : ueber ? '<span class="lb-pill crit">überfällig</span>' : '') + '</li>';
+    }).join('') + '</ul>' + (warten.length > 6 ? '<button class="btn-outline" style="width:100%" data-action="go-vorgaenge">Alle ' + warten.length + ' Mail-Vorgänge</button>' : '') + '</div>';
+  // Heute erledigt: von dir oder automatisch abgehakt, neueste zuerst. Haken antippen holt den Punkt zurück.
+  var heuteErledigt = alle.filter(function(p) { return p.erledigt && (function(d) { return d && d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) === heuteLokal; })(p.erledigtAm ? new Date(p.erledigtAm) : null); })
+    .sort(function(a, b) { return String(b.erledigtAm).localeCompare(String(a.erledigtAm)); });
+  if (heuteErledigt.length) html += '<div class="lb-panel"><h2>Heute erledigt <small>' + heuteErledigt.length + '</small></h2><ul class="lb-todo tag-liste">' +
+    heuteErledigt.map(function(p) {
+      var d = new Date(p.erledigtAm), uhr = isNaN(d) ? '' : ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      return '<li class="erledigt"><button class="tag-haken an" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="Haken entfernen">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>' +
+        '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
+    }).join('') + '</ul></div>';
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
@@ -6292,7 +6314,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-09e';
+var APP_STAND = '2026-11-10b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
