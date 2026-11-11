@@ -3009,7 +3009,10 @@ function vMeinTag() {
             // Jedes Thema kann eine eigene Kurzinfo haben (Feld info, seit 10.11.2026): „Mehr ▾“ klappt sie unter dem Thema auf
             var tAuf = t.info && S.tagTeilInfoOffen === p.id + ':' + i;
             return '<span class="tag-teil-zeile"><button type="button" class="tag-teil' + (t.erledigt ? ' an' : '') + '" data-action="tag-teil" data-tid="' + escH(p.id) + '" data-idx="' + i + '"><span class="tag-teil-box">' + (t.erledigt ? '&#10003;' : '') + '</span>' + escH(t.text) + '</button>' +
+              '<span style="display:flex;flex-wrap:wrap;align-items:baseline">' +
               (t.info ? '<button type="button" class="tag-teil-mehr" data-action="tag-teil-info" data-tid="' + escH(p.id) + '" data-idx="' + i + '">' + (tAuf ? 'Weniger ▴' : 'Mehr ▾') + '</button>' : '') +
+              (TAG_AUFTRAG && !t.erledigt ? '<button type="button" class="tag-teil-mehr" style="padding-left:14px" data-action="tag-teil-ergebnis" data-tid="' + escH(p.id) + '" data-idx="' + i + '">' + (p.art === 'anruf' ? 'Ergebnis' : 'Auftrag') + '</button>' : '') +
+              '</span>' +
               (tAuf ? '<span class="tag-teil-info">' + String(t.info).split(/\n/).map(escH).join('<br>') + '</span>' : '') + '</span>'; }).join('') + '</span>' : '') + (auftragZeile ? '<span class="tag-ergebnis">' + auftragZeile + '</span>' : '') + '</span>' : '') + (info ? '' : auftragZeile) +
           (p.erledigt && p.erledigtGrund ? '<span class="auftrag">' + escH(p.erledigtGrund) + '</span>' : '') + '</span>' + rechts + '</li>' +
           (TAG_AUFTRAG && S.tagAuftragOffen === p.id ? tagAuftragForm(p) : '') +
@@ -5245,6 +5248,12 @@ document.addEventListener('click', function(e) {
   }
   if (a.action === 'tag-haken') { tagespunktHaken(a.tid); return; }
   if (a.action === 'tag-zettel') { tagZettelAnfordern(); return; }
+  if (a.action === 'tag-teil-ergebnis') {
+    var tp = (S.tagespunkte || []).filter(function(x) { return x && x.id === a.tid; })[0], tt = tp && (tp.teile || [])[parseInt(a.idx, 10)];
+    if (!tt) return;
+    S.tagAuftragOffen = a.tid; S.tagAuftragText = (tp.art === 'anruf' ? 'Ergebnis zu „' : 'Auftrag zu „') + tt.text + '“: '; render();
+    setTimeout(function() { var t = document.getElementById('tag-auftrag-text'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 50); return;
+  }
   if (a.action === 'tag-auftrag') { S.tagAuftragOffen = S.tagAuftragOffen === a.tid ? null : a.tid; S.tagAuftragText = ''; render();
     setTimeout(function() { var t = document.getElementById('tag-auftrag-text'); if (t) t.focus(); }, 50); return; }
   if (a.action === 'tag-auftrag-vorlage') { var tv = document.getElementById('tag-auftrag-text'); var vw = tagAuftragVorlagen(S.tagAuftragOffen)[parseInt(a.idx, 10)] || '';
@@ -6401,7 +6410,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-11c';
+var APP_STAND = '2026-11-11d';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
