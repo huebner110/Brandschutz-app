@@ -423,7 +423,7 @@ var AUFGABEN_DEFAULT = [
 ];
 
 var S = {
-  view: 'home',
+  view: 'tag',
   categories: [],
   inspections: [],
   currentInspection: null,
@@ -945,18 +945,18 @@ function render() {
 }
 
 /* ── LEISTE UNTEN ── Welche Seite zu welchem Reiter gehört */
-var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', tag: 'tag', 'maengel-global': 'maengel', termine: 'termine',
-  mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr', vorgaenge: 'mehr', belege: 'mehr',
+var TAB_VIEWS = { home: 'home', dashboard: 'home', standort: 'home', tag: 'tag', 'maengel-global': 'maengel', termine: 'tag',
+  mehr: 'mehr', aufgaben: 'mehr', technik: 'mehr', unterweisungen: 'mehr', 'uw-standort': 'mehr', vorschlaege: 'mehr', vorgaenge: 'vorgaenge', 'vorgang-form': 'vorgaenge', belege: 'mehr',
   matrix: 'mehr', 'qr-codes': 'mehr', settings: 'mehr', hilfe: 'mehr' };
 
 function tabLeisteHtml(aktiv) {
   var nUeber = offeneMaengelAlle().filter(function(it) { return tageUeberfaellig(it.mangel) > 0; }).length;
   var tabs = [
-    { id: 'home', action: 'go-home', label: 'Lage', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>' },
     { id: 'tag', action: 'go-tag', label: 'Mein Tag', zahl: offeneTagespunkte().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 8 8 4"/><polyline points="3 13 5 15 8 11"/><line x1="11" y1="6" x2="21" y2="6"/><line x1="11" y1="13" x2="21" y2="13"/><line x1="11" y1="20" x2="21" y2="20"/><circle cx="5" cy="20" r="1.5"/></svg>' },
+    { id: 'home', action: 'go-home', label: 'Lage', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>' },
     { id: 'maengel', action: 'go-maengel-global', label: 'Mängel', zahl: nUeber, icon: LB_ICON.mangel.replace(/15/g, '22') },
-    { id: 'termine', action: 'go-termine', label: 'Termine', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
-    { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length + ueberfaelligeVorgaenge().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
+    { id: 'vorgaenge', action: 'go-vorgaenge', label: 'Vorgänge', zahl: ueberfaelligeVorgaenge().length, icon: LB_ICON.mail.replace(/15/g, '22') },
+    { id: 'mehr', action: 'go-mehr', label: 'Mehr', zahl: offeneVorschlaege().length, icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>' }
   ];
   return '<nav class="tab-leiste">' + tabs.map(function(t) {
     return '<button class="' + (t.id === aktiv ? 'aktiv' : '') + '" data-action="' + t.action + '">' + t.icon + '<span>' + t.label + '</span>' +
@@ -972,7 +972,7 @@ function vMehr() {
     { action: 'go-technik', icon: 'technik', titel: 'Technik', sub: 'Anlagen, Wartungsverträge, Ansprechpartner' },
     { action: 'go-unterweisungen', icon: 'unterweisung', titel: 'Unterweisungen', sub: 'Mitarbeiter und Nachweise je Standort' },
     { action: 'go-vorschlaege', icon: 'mail', titel: 'Vorschläge aus Mails', sub: nv ? nv + ' neu' : 'keine neuen', ton: nv ? 'warn' : '' },
-    { action: 'go-vorgaenge', icon: 'mail', titel: 'Mail-Vorgänge', sub: offeneVorgaenge().length + ' warten auf Antwort' + (nu ? ', ' + nu + ' überfällig' : ''), ton: nu ? 'crit' : '' },
+    { action: 'go-termine', icon: 'begehung', titel: 'Terminkalender', sub: 'alle Fristen: Anlagen, Begehungen, Aufgaben' },
     { action: 'go-belege', icon: 'aufgabe', titel: 'Belege', sub: belegeZuPruefen().length ? belegeZuPruefen().length + ' zu prüfen' : 'fotografieren für die Techniker-Abrechnung', ton: belegeZuPruefen().length ? 'warn' : '' },
     { action: 'go-matrix', icon: 'begehung', titel: 'Compliance-Matrix', sub: 'alle Standorte als Tabelle' },
     { action: 'go-qr', icon: 'begehung', titel: 'QR-Codes', sub: 'zum Aushang je Standort' },
@@ -1077,10 +1077,6 @@ function vHome() {
     lagebildKopfHtml() +
     fortsetzenHtml() +
     lagebildKachelnHtml() +
-    heuteZuTunHtml() +
-    '<div class="lb-panel"><h2>Neue Begehung oder Meldung</h2><div style="padding:12px">' +
-    startFormularHtml(locationOpts) +
-    '</div></div>' +
     recentHtml +
     '</div>';
 }
@@ -1624,32 +1620,33 @@ function mangelAnstossMail(it, nFotos) {
 }
 
 function mangelKarteHtml(it, mitStandort) {
-  var m = it.mangel, ue = tageUeberfaellig(m);
+  var m = it.mangel, ue = tageUeberfaellig(m), auf = !!(S.mgOffen && S.mgOffen[m.id]);
   return '<div class="mangel-card mangel-card-' + m.dringlichkeit + '">' +
-    '<div class="mangel-card-header"><span class="mangel-card-cat">' + (mitStandort ? it.insp.standort + ' &middot; ' : '') + fmtDate(it.insp.datum) +
+    '<div class="mangel-card-header" data-action="mg-auf" data-mid="' + m.id + '" style="cursor:pointer"><span class="mangel-card-cat">' + (mitStandort ? it.insp.standort + ' &middot; ' : '') + fmtDate(it.insp.datum) +
     (it.insp.schnellmeldung ? ' · Direktmeldung' : ' · Begehung') + '</span>' +
     '<span class="dring-badge dring-' + m.dringlichkeit + '">' + m.dringlichkeit + '</span></div>' +
-    '<div class="mangel-card-item">' + escH(mangelKurz(m)) + '</div>' +
-    (m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 && ohneVerlauf(m.beschreibung) ? '<div class="mangel-card-desc">' + escH(ohneVerlauf(m.beschreibung)) + '</div>' : '') +
-    '<div class="mg-status">' + MG_STATI.map(function(s) {
+    '<div class="mangel-card-item" data-action="mg-auf" data-mid="' + m.id + '" style="cursor:pointer">' + escH(mangelKurz(m)) + '</div>' +
+    (auf && m.checkName && m.checkName.indexOf('Direktmeldung') !== 0 && ohneVerlauf(m.beschreibung) ? '<div class="mangel-card-desc">' + escH(ohneVerlauf(m.beschreibung)) + '</div>' : '') +
+    (auf ? '<div class="mg-status">' + MG_STATI.map(function(s) {
       return '<button class="mg-st' + (mangelStatus(m) === s[0] ? ' mg-st-an' : '') + '" data-action="mangel-status" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '" data-val="' + s[0] + '">' + s[1] + '</button>';
-    }).join('') + '</div>' +
-    (mangelLetzterStand(m) ? '<div class="mangel-card-frist"><b>Letzter Stand:</b> ' + escH(mangelLetzterStand(m)) + '</div>' : '') +
-    (mangelTueren(m, it.insp).length ? '<div class="mangel-card-frist">Türen: ' + escH(tuerenText(mangelTueren(m, it.insp))) + '</div>' : '') +
+    }).join('') + '</div>' : '<div class="mangel-card-frist">Status: ' + MG_STATI.filter(function(s) { return s[0] === mangelStatus(m); })[0][1] + '</div>') +
+    (auf && mangelLetzterStand(m) ? '<div class="mangel-card-frist"><b>Letzter Stand:</b> ' + escH(mangelLetzterStand(m)) + '</div>' : '') +
+    (auf && mangelTueren(m, it.insp).length ? '<div class="mangel-card-frist">Türen: ' + escH(tuerenText(mangelTueren(m, it.insp))) + '</div>' : '') +
     (m.frist ? '<div class="mangel-card-frist"' + (ue ? ' style="color:var(--crit);font-weight:700"' : '') + '>Frist: ' + fmtDate(m.frist) + (ue ? ' · seit ' + ue + ' Tagen überfällig' : '') + '</div>' : '') +
     '<div class="mangel-card-frist"' + (m.zustaendig ? '' : ' style="color:var(--warn, #b9770e);font-weight:700"') + '>Zuständig: ' + (m.zustaendig ? escH(m.zustaendig) : 'noch niemand eingetragen (gilt: ' + ZUST_STANDARD + ')') + '</div>' +
-    (mangelBewegtTage(it) >= 3 ? '<div class="mangel-card-frist">Seit ' + mangelBewegtTage(it) + ' Tagen keine Bewegung</div>' : '') +
+    (auf && mangelBewegtTage(it) >= 3 ? '<div class="mangel-card-frist">Seit ' + mangelBewegtTage(it) + ' Tagen keine Bewegung</div>' : '') +
     (m.nachfassAm ? '<div class="mangel-card-frist"' + (m.nachfassAm <= today() ? ' style="color:var(--crit);font-weight:700"' : '') + '>Nachfassen: ' + fmtDate(m.nachfassAm) + (m.nachfassAm <= today() ? ' · jetzt dran' : '') + '</div>' : '') +
-    (mangelVermerke(m).length ? '<details class="mg-verlauf"><summary>Verlauf (' + mangelVermerke(m).length + ')</summary>' + mangelVermerke(m).map(function(v) { return '<div>' + escH(v) + '</div>'; }).join('') + '</details>' : '') +
+    (auf && mangelVermerke(m).length ? '<details class="mg-verlauf"><summary>Verlauf (' + mangelVermerke(m).length + ')</summary>' + mangelVermerke(m).map(function(v) { return '<div>' + escH(v) + '</div>'; }).join('') + '</details>' : '') +
     (beiAnderen(m) ? '<div class="mangel-card-frist" style="font-weight:700">Liegt bei anderen</div>' : '') +
-    mailStandHtml(m) +
+    (auf ? mailStandHtml(m) : '') +
     '<div class="mangel-card-actions"><button class="btn-sm-ok" data-action="mark-behoben" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">Als behoben markieren</button>' +
-    '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button></div>' +
-    '<div class="mangel-card-actions" style="padding-top:0">' +
+    '' + (auf ? '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-bei" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + (beiAnderen(m) ? 'Zurück zu mir' : 'Liegt bei anderen') + '</button>' : '') +
+    '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mg-auf" data-mid="' + m.id + '">' + (auf ? 'Weniger ▴' : 'Mehr ▾') + '</button></div>' +
+    (auf ? '<div class="mangel-card-actions" style="padding-top:0">' +
     ['oeffnen|Öffnen', 'zuweisen|Zuweisen', 'anstossen|' + (mangelGesendet(m) ? 'Nachfragen' : 'Melden'), 'nachfassen|Nachfassen'].map(function(x) {
       x = x.split('|');
       return '<button class="btn-outline" style="width:auto;padding:5px 10px;font-size:12px" data-action="mangel-' + x[0] + '" data-inspid="' + it.insp.id + '" data-mid="' + m.id + '">' + x[1] + '</button>';
-    }).join('') + '</div></div>';
+    }).join('') + '</div>' : '') + '</div>';
 }
 
 function mangelSortierung(a, b) {
@@ -1670,7 +1667,7 @@ function vMaengelGlobal() {
   var alle = offeneMaengelAlle();
   var filter = S.mgFilter || 'alle';
   var ort = S.mgStandort || '';
-  var bei = S.mgBei || 'alle';
+  var bei = S.mgBei || 'mir';
   if (bei !== 'alle') alle = alle.filter(function(it) { return beiAnderen(it.mangel) === (bei === 'andere'); });
   var items = alle.filter(function(it) {
     if (ort && it.insp.standort !== ort) return false;
@@ -2417,8 +2414,8 @@ function vHilfe() {
       'Erscheint automatisch wenn eine Begehung oder Unterweisung überfällig oder in Kürze fällig ist. Gelb = demnächst fällig, Rot = überfällig. Intervalle werden in den Einstellungen je Standort festgelegt.') +
 
     '<div class="section-header">Leiste unten</div>' +
-    hSection('⌂', 'Lage, Mängel, Termine, Mehr',
-      'Lage = Startseite mit Standort-Kacheln. Mein Tag = Punkte vom Fahrt-Zettel (Anrufe, Fragen zum Diktieren, Freigaben) zum Abhaken. Mängel = alle offenen Mängel, filterbar nach Standort, überfällig und kritisch (die rote Zahl zeigt die überfälligen). Termine = Terminkalender. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Mail-Vorgänge, Belege, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
+    hSection('⌂', 'Mein Tag, Lage, Mängel, Vorgänge, Mehr',
+      'Mein Tag = Startseite: Begehung starten und Mangel melden, Termine heute, Fahrt-Zettel zum Abhaken, Fristen und Überfälliges, Wartet auf Antwort (eingeklappt). Lage = Standort-Kacheln. Mängel = offene Mängel (zuerst die bei dir, überfällige oben; Mangel antippen für alle Knöpfe, die rote Zahl zeigt die überfälligen). Vorgänge = Mail-Vorgänge. Mehr = Aufgaben, Technik, Unterweisungen, Vorschläge, Terminkalender, Belege, Compliance-Matrix, QR-Codes, Einstellungen, Hilfe.') +
     hSection('👥', 'Unterweisungen',
       'Brandschutzunterweisungen verwalten. Pro Standort Mitarbeiterliste pflegen, Unterweisungen erfassen und Nachweise als PDF exportieren. Die App zeigt automatisch an wenn die Jahresfrist (DGUV V2) abläuft.') +
     hSection('△', 'Offene Mängel',
@@ -3020,19 +3017,21 @@ function vMeinTag() {
       }).join('') + '</ul></div>';
   });
   if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen werktags um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
+  html += tagFristenHtml();
   // Wartet auf Antwort (seit 10.11.2026): offene Mail-Vorgänge der Nachfass-Liste, nur zum Ansehen. Antwort da zuerst, dann nach Frist.
   var warten = (S.vorgaenge || []).filter(function(v) { return v && v.id && !v.aktion && (v.art === 'offen' || v.art === 'antwort'); })
     .sort(function(a, b) { return (a.art === 'antwort' ? 0 : 1) - (b.art === 'antwort' ? 0 : 1) || String(a.frist || '9').localeCompare(String(b.frist || '9')); });
-  if (warten.length) html += '<div class="lb-panel"><h2>Wartet auf Antwort <small>' + warten.length + '</small></h2><ul class="lb-todo tag-liste">' +
+  if (warten.length) html += '<div class="lb-panel"><h2 data-action="tag-sek" data-sek="warten" style="cursor:pointer">Wartet auf Antwort <small>' + warten.length + ' · ' + (S.tagSek && S.tagSek.warten ? 'einklappen ▴' : 'anzeigen ▾') + '</small></h2>' +
+    (S.tagSek && S.tagSek.warten ? '<ul class="lb-todo tag-liste">' : '<ul class="lb-todo tag-liste" hidden>') +
     warten.slice(0, 6).map(function(v) {
       var ueber = v.art === 'offen' && v.frist && v.frist < today();
       return '<li><span class="t"><b>' + escH(v.betreff) + '</b><span>an ' + escH(String(v.an || '').split('@')[0].replace(/\./g, ' ')) + (v.frist ? ' · Frist ' + fmtDate(v.frist) : '') + '</span></span>' +
         (v.art === 'antwort' ? '<span class="lb-pill ok">Antwort da</span>' : ueber ? '<span class="lb-pill crit">überfällig</span>' : '') + '</li>';
-    }).join('') + '</ul>' + (warten.length > 6 ? '<button class="btn-outline" style="width:100%" data-action="go-vorgaenge">Alle ' + warten.length + ' Mail-Vorgänge</button>' : '') + '</div>';
+    }).join('') + '</ul>' + (S.tagSek && S.tagSek.warten ? '<button class="btn-outline" style="width:100%" data-action="go-vorgaenge">Alle ' + warten.length + ' Mail-Vorgänge</button>' : '') + '</div>';
   // Heute erledigt: von dir oder automatisch abgehakt, neueste zuerst. Haken antippen holt den Punkt zurück.
   var heuteErledigt = alle.filter(function(p) { return p.erledigt && (function(d) { return d && d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) === heuteLokal; })(p.erledigtAm ? new Date(p.erledigtAm) : null); })
     .sort(function(a, b) { return String(b.erledigtAm).localeCompare(String(a.erledigtAm)); });
-  if (heuteErledigt.length) html += '<div class="lb-panel"><h2>Heute erledigt <small>' + heuteErledigt.length + '</small></h2><ul class="lb-todo tag-liste">' +
+  if (heuteErledigt.length) html += '<div class="lb-panel"><h2 data-action="tag-sek" data-sek="erledigt" style="cursor:pointer">Heute erledigt <small>' + heuteErledigt.length + ' · ' + (S.tagSek && S.tagSek.erledigt ? 'einklappen ▴' : 'anzeigen ▾') + '</small></h2><ul class="lb-todo tag-liste"' + (S.tagSek && S.tagSek.erledigt ? '' : ' hidden') + '>' +
     heuteErledigt.map(function(p) {
       var d = new Date(p.erledigtAm), uhr = isNaN(d) ? '' : ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
       return '<li class="erledigt"><button class="tag-haken an" data-action="tag-haken" data-tid="' + escH(p.id) + '" aria-label="Haken entfernen">' +
@@ -3040,6 +3039,7 @@ function vMeinTag() {
         '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
     }).join('') + '</ul></div>';
   if (TAG_ZETTEL_KNOPF) html = tagZettelKnopf() + html;
+  html = tagStartHtml() + html;
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
@@ -3151,6 +3151,30 @@ function tagAuftragSenden(tid) {
   render();
 }
 
+/* Mein Tag als Startseite (11.11.2026): Begehung/Mangel, Fristen und Überfälliges stehen hier statt auf Lage und Termine. */
+function tagStartHtml() {
+  var opts = LOCATIONS.map(function(l) {
+    return '<option value="' + l + '"' + (l === S.lastStandort ? ' selected' : '') + '>' + l + '</option>';
+  }).join('');
+  return '<div class="lb-panel"><h2>Begehung oder Meldung</h2><div style="padding:12px">' + startFormularHtml(opts) + '</div></div>';
+}
+
+function tagFristenHtml() {
+  var liste = heuteZuTunListe().filter(function(it) { return it.action !== 'go-tag'; });
+  var auf = !!(S.tagSek && S.tagSek.fristen);
+  var zeigen = auf ? liste : liste.slice(0, 5);
+  var html = zeigen.map(function(it) {
+    return '<li data-action="' + it.action + '"' + (it.loc ? ' data-loc="' + escH(it.loc) + '"' : '') + '>' +
+      '<span class="lb-icon ' + it.ton + '">' + (LB_ICON[it.icon] || LB_ICON.mangel) + '</span>' +
+      '<span class="t"><b>' + escH(it.titel) + '</b><span>' + escH(it.sub) + '</span></span>' +
+      '<span class="lb-pill ' + it.ton + '">' + escH(it.rechts) + '</span></li>';
+  }).join('');
+  return '<div class="lb-panel"><h2>Fristen und Überfälliges <small>' + liste.length + '</small></h2>' +
+    (liste.length ? '<ul class="lb-todo">' + html + '</ul>' : '<div class="lb-leer">Nichts überfällig und nichts in den nächsten Tagen fällig.</div>') +
+    (liste.length > 5 ? '<div class="lb-mehr" data-action="tag-sek" data-sek="fristen">' + (auf ? 'Weniger anzeigen' : 'Alle ' + liste.length + ' anzeigen') + '</div>' : '') +
+    '<div class="lb-mehr" data-action="go-termine">Terminkalender öffnen</div></div>';
+}
+
 function tagKalender() {
   var heute = today();
   var termine = (S.tagespunkte || []).filter(function(p) { return p && p.art === 'kalender' && p.datum === heute; })
@@ -3191,7 +3215,7 @@ function tagZettelAnforderung() {
 function tagZettelKnopf() {
   var laeuft = !!tagZettelAnforderung();
   return '<button class="btn-outline" style="width:100%;margin-bottom:10px"' + (laeuft ? ' disabled' : ' data-action="tag-zettel"') + '>' +
-    (laeuft ? 'Zettel wird erstellt (ein paar Minuten) …' : '🔄 Zettel neu holen') + '</button>';
+    (laeuft ? 'Zettel wird erstellt – der Hinweis verschwindet, wenn er fertig ist' : '🔄 Zettel neu holen') + '</button>';
 }
 
 function tagZettelAnfordern() {
@@ -5152,6 +5176,8 @@ document.addEventListener('click', function(e) {
 
   if (a.action === 'go-settings') { nav('settings'); return; }
   if (a.action === 'go-home') { nav('home'); return; }
+  if (a.action === 'tag-sek') { S.tagSek = S.tagSek || {}; S.tagSek[a.sek] = !S.tagSek[a.sek]; render(); return; }
+  if (a.action === 'mg-auf') { S.mgOffen = S.mgOffen || {}; S.mgOffen[a.mid] = !S.mgOffen[a.mid]; render(); return; }
   if (a.action === 'go-hilfe') { nav('hilfe'); return; }
   if (a.action === 'go-dashboard') { nav('home'); return; }
   if (a.action === 'go-mehr') { nav('mehr'); return; }
@@ -6347,7 +6373,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-11a';
+var APP_STAND = '2026-11-11b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
