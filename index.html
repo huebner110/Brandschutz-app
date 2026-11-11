@@ -3017,7 +3017,7 @@ function vMeinTag() {
       }).join('') + '</ul></div>';
   });
   if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen werktags um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
-  html += tagFristenHtml();
+  html += tagStartHtml() + tagFristenHtml();
   // Wartet auf Antwort (seit 10.11.2026): offene Mail-Vorgänge der Nachfass-Liste, nur zum Ansehen. Antwort da zuerst, dann nach Frist.
   var warten = (S.vorgaenge || []).filter(function(v) { return v && v.id && !v.aktion && (v.art === 'offen' || v.art === 'antwort'); })
     .sort(function(a, b) { return (a.art === 'antwort' ? 0 : 1) - (b.art === 'antwort' ? 0 : 1) || String(a.frist || '9').localeCompare(String(b.frist || '9')); });
@@ -3039,10 +3039,10 @@ function vMeinTag() {
         '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
     }).join('') + '</ul></div>';
   if (TAG_ZETTEL_KNOPF) html = tagZettelKnopf() + html;
-  html = tagStartHtml() + html;
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
-    '<div class="header-sub">' + sub + '</div></div></div>' +
+    '<div class="header-sub">' + sub + '</div></div>' +
+    '<button class="btn-primary" style="width:auto;padding:8px 14px;font-size:14px" data-action="mangel-schnell">⚠ Mangel melden</button></div>' +
     '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
 }
 
@@ -3169,7 +3169,7 @@ function tagFristenHtml() {
       '<span class="t"><b>' + escH(it.titel) + '</b><span>' + escH(it.sub) + '</span></span>' +
       '<span class="lb-pill ' + it.ton + '">' + escH(it.rechts) + '</span></li>';
   }).join('');
-  return '<div class="lb-panel"><h2>Fristen und Überfälliges <small>' + liste.length + '</small></h2>' +
+  return '<div class="lb-panel"><h2>Überfällig und bald fällig <small>' + liste.length + '</small></h2>' +
     (liste.length ? '<ul class="lb-todo">' + html + '</ul>' : '<div class="lb-leer">Nichts überfällig und nichts in den nächsten Tagen fällig.</div>') +
     (liste.length > 5 ? '<div class="lb-mehr" data-action="tag-sek" data-sek="fristen">' + (auf ? 'Weniger anzeigen' : 'Alle ' + liste.length + ' anzeigen') + '</div>' : '') +
     '<div class="lb-mehr" data-action="go-termine">Terminkalender öffnen</div></div>';
@@ -3177,7 +3177,7 @@ function tagFristenHtml() {
 
 function tagKalender() {
   var heute = today();
-  var termine = (S.tagespunkte || []).filter(function(p) { return p && p.art === 'kalender' && p.datum === heute; })
+  var termine = (S.tagespunkte || []).filter(function(p) { return p && p.art === 'kalender' && !p.plan && p.datum === heute; })
     .sort(function(a, b) { return (a.beginn || '').localeCompare(b.beginn || '') || (a.nr || 0) - (b.nr || 0); });
   var d = new Date(), jetzt = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
   var liste = termine.length ? termine.map(function(p) {
@@ -3186,7 +3186,23 @@ function tagKalender() {
     return '<li class="' + cls + '"><span class="zeit">' + zeit + '</span><span class="t"><b>' + escH(p.titel) + '</b>' +
       (p.ort ? '<span>' + escH(p.ort) + '</span>' : '') + '</span></li>';
   }).join('') : '<li><span class="zeit">–</span><span class="t"><span>Keine dienstlichen Termine eingetragen.</span></span></li>';
-  return '<div class="lb-panel tag-kal"><h2>Termine heute <small>' + fmtDate(heute) + '</small></h2><ul class="lb-todo">' + liste + '</ul></div>';
+  return '<div class="tag-kal">' + '<div class="lb-panel"><h2>Termine heute <small>' + fmtDate(heute) + '</small></h2><ul class="lb-todo">' + liste + '</ul></div>' + tagBegehungsplan() + '</div>';
+}
+
+/* Nächste Begehungen (11.11.2026): die nächsten drei Begehungs-Termine aus dem Kalender (Server, kalender-live.py, Felder plan/tag/standort).
+   Antippen startet die Begehung an diesem Standort (nach Rückfrage). */
+function tagBegehungsplan() {
+  var heute = today();
+  var plan = (S.tagespunkte || []).filter(function(p) { return p && p.art === 'kalender' && p.plan && p.tag && p.tag >= heute; })
+    .sort(function(a, b) { return String(a.tag).localeCompare(String(b.tag)) || (a.beginn || '').localeCompare(b.beginn || ''); }).slice(0, 3);
+  if (!plan.length) return '';
+  return '<div class="lb-panel"><h2>Nächste Begehungen <small>antippen = starten</small></h2><ul class="lb-todo">' + plan.map(function(p) {
+    var t = daysBetween(heute, p.tag), d = new Date(p.tag + 'T12:00:00');
+    var wann = t === 0 ? 'heute' : t === 1 ? 'morgen' : 'in ' + t + ' Tagen';
+    var ort = p.standort || String(p.titel || '').replace(/^Termin\s+/i, '').replace(/^Brandschutzbegehung\s*/i, '');
+    return '<li' + (p.standort ? ' data-action="plan-start" data-loc="' + escH(p.standort) + '"' : '') + '><span class="zeit">' + WOCHENTAG_KURZ[d.getDay()] + ' ' + fmtDate(p.tag).slice(0, 6) + '</span>' +
+      '<span class="t"><b>' + escH(ort || p.titel) + '</b><span>' + wann + (p.beginn ? ' · ' + escH(p.beginn) + ' Uhr' : '') + '</span></span></li>';
+  }).join('') + '</ul></div>';
 }
 
 function tagNummerKopieren(el, nr) {
@@ -5176,6 +5192,18 @@ document.addEventListener('click', function(e) {
 
   if (a.action === 'go-settings') { nav('settings'); return; }
   if (a.action === 'go-home') { nav('home'); return; }
+  if (a.action === 'mangel-schnell') {
+    var msel = document.getElementById('h-standort'), mbtn = document.querySelector('[data-action="start-schnellmangel"]');
+    if (msel && mbtn) mbtn.click();
+    return;
+  }
+  if (a.action === 'plan-start') {
+    if (!confirm('Begehung ' + a.loc + ' jetzt starten?')) return;
+    S.lastStandort = a.loc; render();
+    var psel = document.getElementById('h-standort'), pbtn = document.querySelector('[data-action="start-inspection"]');
+    if (psel && pbtn) { psel.value = a.loc; pbtn.click(); }
+    return;
+  }
   if (a.action === 'tag-sek') { S.tagSek = S.tagSek || {}; S.tagSek[a.sek] = !S.tagSek[a.sek]; render(); return; }
   if (a.action === 'mg-auf') { S.mgOffen = S.mgOffen || {}; S.mgOffen[a.mid] = !S.mgOffen[a.mid]; render(); return; }
   if (a.action === 'go-hilfe') { nav('hilfe'); return; }
@@ -6373,7 +6401,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-11b';
+var APP_STAND = '2026-11-11c';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
