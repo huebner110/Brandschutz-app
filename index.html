@@ -2948,6 +2948,9 @@ var TAG_VERSCHIEBEN = true;
 var TAG_INFO = true;
 // Termine von heute in Mein Tag (Art kalender, vom Fahrt-Zettel). Zum Abschalten auf false setzen.
 var TAG_KALENDER = true;
+// Knopf „Zettel neu holen“ oben in Mein Tag (seit 11.11.2026): legt einen Punkt der Art anforderung an, der Server
+// erstellt dann den Fahrt-Zettel neu (zettel-anforderung.py) und entfernt ihn wieder. Zum Abschalten false.
+var TAG_ZETTEL_KNOPF = true;
 // Auftrag an Claude aus einem Punkt: Feld auftrag geht über den Abgleich an den Server (tag-auftraege.py),
 // der Server schreibt auftragStatus (erledigt/rueckfrage) und auftragErgebnis zurück. Zum Abschalten false.
 var TAG_AUFTRAG = true;
@@ -2957,11 +2960,11 @@ var TAG_ERGEBNIS_VORLAGEN = ['Erreicht: ', 'Nicht erreicht, morgen nochmal', 'R�
 var FENSTER_NAME = { morgen: 'Morgen', mittag: 'Mittag', nachmittag: 'Heimfahrt' };
 
 function offeneTagespunkte() {
-  return (S.tagespunkte || []).filter(function(p) { return p && !p.erledigt && p.art !== 'termin' && p.art !== 'kalender'; });
+  return (S.tagespunkte || []).filter(function(p) { return p && !p.erledigt && p.art !== 'termin' && p.art !== 'kalender' && p.art !== 'anforderung'; });
 }
 
 function vMeinTag() {
-  var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id && p.art !== 'kalender'; })
+  var alle = (S.tagespunkte || []).filter(function(p) { return p && p.id && p.art !== 'kalender' && p.art !== 'anforderung'; })
     .sort(function(a, b) { return (a.nr || 0) - (b.nr || 0); });
   var neuester = alle.reduce(function(m, p) { return (p.erstellt || '') > (m.erstellt || '') ? p : m; }, {});
   // Kopfzeile: heutiger Tag und Stand = jüngste Änderung (neuer Zettel oder Haken, auch vom Server), seit 10.11.2026
@@ -3036,6 +3039,7 @@ function vMeinTag() {
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></button>' +
         '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
     }).join('') + '</ul></div>';
+  if (TAG_ZETTEL_KNOPF) html = tagZettelKnopf() + html;
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div></div>' +
@@ -3175,6 +3179,26 @@ function tagespunktTeil(tid, i) {
   var alle = p.teile.filter(function(t) { return t && t.text; });
   p.erledigt = alle.length > 0 && alle.every(function(t) { return t.erledigt; });
   p.erledigtAm = p.erledigt ? new Date().toISOString() : '';
+  save();
+  render();
+}
+
+function tagZettelAnforderung() {
+  var grenze = Date.now() - 30 * 60000;
+  return (S.tagespunkte || []).filter(function(p) { return p && p.art === 'anforderung' && (Date.parse(p.erstellt || '') || 0) > grenze; })[0];
+}
+
+function tagZettelKnopf() {
+  var laeuft = !!tagZettelAnforderung();
+  return '<button class="btn-outline" style="width:100%;margin-bottom:10px"' + (laeuft ? ' disabled' : ' data-action="tag-zettel"') + '>' +
+    (laeuft ? 'Zettel wird erstellt (ein paar Minuten) …' : '🔄 Zettel neu holen') + '</button>';
+}
+
+function tagZettelAnfordern() {
+  if (tagZettelAnforderung()) return;
+  var jetzt = new Date();
+  (S.tagespunkte = S.tagespunkte || []).push({ id: 'anf-' + jetzt.getTime(), art: 'anforderung', titel: 'Zettel neu holen', text: '', info: '', teile: [],
+    datum: today(), erstellt: jetzt.toISOString(), erledigt: false, erledigtAm: '' });
   save();
   render();
 }
@@ -5166,6 +5190,7 @@ document.addEventListener('click', function(e) {
     save(); nav('belege'); return;
   }
   if (a.action === 'tag-haken') { tagespunktHaken(a.tid); return; }
+  if (a.action === 'tag-zettel') { tagZettelAnfordern(); return; }
   if (a.action === 'tag-auftrag') { S.tagAuftragOffen = S.tagAuftragOffen === a.tid ? null : a.tid; S.tagAuftragText = ''; render();
     setTimeout(function() { var t = document.getElementById('tag-auftrag-text'); if (t) t.focus(); }, 50); return; }
   if (a.action === 'tag-auftrag-vorlage') { var tv = document.getElementById('tag-auftrag-text'); var vw = tagAuftragVorlagen(S.tagAuftragOffen)[parseInt(a.idx, 10)] || '';
@@ -6322,7 +6347,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-10c';
+var APP_STAND = '2026-11-11a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
