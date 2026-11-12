@@ -2982,6 +2982,7 @@ function vMeinTag() {
   TAG_ARTEN.forEach(function(g) {
     var punkte = alle.filter(function(p) { return g.arten.indexOf(p.art) >= 0 && !p.erledigt; });
     if (!punkte.length) return;
+    if (g.art === 'meeting' && TAG_VORLESEN) html += tagVorlesenEinstellungHtml();
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
     var offen = g.ohneHaken ? 0 : punkte.filter(function(p) { return !p.erledigt; }).length;
@@ -3063,6 +3064,21 @@ function vMeinTag() {
 // Vorlesen (seit 12.11.2026): „Vorlesen“ unter einem Thema liest Thema und Kurzinfo mit der Stimme des Geräts (Browser-Sprachausgabe,
 // de-DE, ohne Server). Zum Abschalten false.
 var TAG_VORLESEN = true;
+// Auswahl von Stimme und Tempo (pro Gerät in localStorage, seit 12.11.2026). Welche Stimmen es gibt, bestimmt der Browser:
+// die Systemstimme aus den Mac-/iPhone-Einstellungen gilt für Webseiten nicht, Siri-Stimmen sind dort oft nicht dabei.
+function tagVorlesenWert(k) { try { return localStorage.getItem('vorlesen' + k) || ''; } catch (e) { return ''; } }
+function tagVorlesenSetzen(k, v) { try { localStorage.setItem('vorlesen' + k, v); } catch (e) {} render(); }
+function tagVorlesenEinstellungHtml() {
+  var ss = window.speechSynthesis; if (!ss || !window.SpeechSynthesisUtterance) return '';
+  var stimmen = ss.getVoices().filter(function(v) { return /^de/i.test(v.lang); }), cur = tagVorlesenWert('Stimme'), tempo = tagVorlesenWert('Tempo') || '1';
+  var opt = stimmen.length ? '<option value="">Automatisch (beste deutsche Stimme)</option>' + stimmen.map(function(v) { return '<option value="' + escH(v.name) + '"' + (v.name === cur ? ' selected' : '') + '>' + escH(v.name) + '</option>'; }).join('')
+    : '<option value="">Keine Stimmen gefunden, Seite neu öffnen</option>';
+  return '<div class="lb-panel" style="padding:10px 12px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">Vorlesen: Stimme und Tempo</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<select class="form-input" style="flex:2 1 220px" onchange="tagVorlesenSetzen(\'Stimme\', this.value)">' + opt + '</select>' +
+    '<select class="form-input" style="flex:1 1 110px" onchange="tagVorlesenSetzen(\'Tempo\', this.value)">' +
+    ['0.9', '1', '1.15', '1.3', '1.5'].map(function(t) { return '<option value="' + t + '"' + (t === tempo ? ' selected' : '') + '>Tempo ' + t.replace('.', ',') + '</option>'; }).join('') + '</select></div></div>';
+}
 function tagVorlesen(tid, idx) {
   var ss = window.speechSynthesis;
   if (!ss || !window.SpeechSynthesisUtterance) { alert('Vorlesen geht in diesem Browser nicht.'); return; }
@@ -3075,8 +3091,10 @@ function tagVorlesen(tid, idx) {
   ss.cancel();
   var u = new SpeechSynthesisUtterance(text); u.lang = 'de-DE';
   var stimmen = ss.getVoices().filter(function(v) { return /^de/i.test(v.lang); });
-  var gut = stimmen.filter(function(v) { return /premium|erweitert|enhanced|anna|petra/i.test(v.name); })[0] || stimmen[0];
+  var gewaehlt = stimmen.filter(function(v) { return v.name === tagVorlesenWert('Stimme'); })[0];
+  var gut = gewaehlt || stimmen.filter(function(v) { return /premium|erweitert|enhanced|anna|petra/i.test(v.name); })[0] || stimmen[0];
   if (gut) u.voice = gut;
+  u.rate = parseFloat(tagVorlesenWert('Tempo')) || 1;
   var ende = function() { if (S.tagSpricht === key) { S.tagSpricht = ''; render(); } };
   u.onend = ende; u.onerror = ende;
   S.tagSpricht = key; ss.speak(u); render();
@@ -6486,7 +6504,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-12d';
+var APP_STAND = '2026-11-12e';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
