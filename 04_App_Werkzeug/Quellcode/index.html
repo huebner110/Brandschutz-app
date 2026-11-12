@@ -2932,6 +2932,8 @@ function vorschlagVerwerfen(vid) {
 // Gruppen (seit 10.11.2026): Diktat, Rückfragen und Hirschgarten stehen zusammen unter „Zu klären“, Punkte mit
 // art hirschgarten tragen den Hinweis „braucht Mac“. Die Art im Datensatz bleibt unverändert (Server, Zettel).
 var TAG_ARTEN = [
+  // Besprechung mit Leitfaden (seit 12.11.2026): ein Punkt mit Themen zum Abhaken (Feld teile), wird vom Server angelegt
+  { art: 'meeting', arten: ['meeting'], titel: 'Besprechung' },
   { art: 'maengel', arten: ['maengel'], titel: 'Mängel heute (1 bis 3)' },
   { art: 'anruf', arten: ['anruf'], titel: 'Anrufe' },
   { art: 'freigabe', arten: ['freigabe'], titel: 'Freigeben (Entwürfe in Mail)' },
@@ -6410,7 +6412,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-11d';
+var APP_STAND = '2026-11-12a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
