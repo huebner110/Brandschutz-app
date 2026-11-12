@@ -3063,7 +3063,7 @@ function vMeinTag() {
 // im Brandschutz-Gmail an (gesendet wird dort von Hand). Zum Abschalten false.
 // Vorlesen (seit 12.11.2026): „Vorlesen“ unter einem Thema liest Thema und Kurzinfo mit der Stimme des Geräts (Browser-Sprachausgabe,
 // de-DE, ohne Server). Zum Abschalten false.
-var TAG_VORLESEN = true;
+var TAG_VORLESEN = false;  // abgeschaltet 12.11.2026 auf Wunsch (Spielerei, Siri-Stimmen nicht im Browser)
 // Auswahl von Stimme und Tempo (pro Gerät in localStorage, seit 12.11.2026). Welche Stimmen es gibt, bestimmt der Browser:
 // die Systemstimme aus den Mac-/iPhone-Einstellungen gilt für Webseiten nicht, Siri-Stimmen sind dort oft nicht dabei.
 function tagVorlesenWert(k) { try { return localStorage.getItem('vorlesen' + k) || ''; } catch (e) { return ''; } }
@@ -6505,7 +6505,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-12f';
+var APP_STAND = '2026-11-12g';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
