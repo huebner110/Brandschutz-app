@@ -2283,6 +2283,7 @@ function vSettings() {
     '<span>Prüfkategorien</span>' +
     '<button class="btn-sm-outline" data-action="add-cat">+ Kategorie</button></div>' +
     catsHtml +
+    (TAG_VORLESEN ? tagVorlesenEinstellungHtml() : '') +
     '' : '') +
     (tab === 'server' ? '' +
     '<div class="section-header">Server-Sicherung</div>' +
@@ -2982,7 +2983,6 @@ function vMeinTag() {
   TAG_ARTEN.forEach(function(g) {
     var punkte = alle.filter(function(p) { return g.arten.indexOf(p.art) >= 0 && !p.erledigt; });
     if (!punkte.length) return;
-    if (g.art === 'meeting' && TAG_VORLESEN) html += tagVorlesenEinstellungHtml();
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
     var offen = g.ohneHaken ? 0 : punkte.filter(function(p) { return !p.erledigt; }).length;
@@ -3073,7 +3073,8 @@ function tagVorlesenEinstellungHtml() {
   var stimmen = ss.getVoices().filter(function(v) { return /^de/i.test(v.lang); }), cur = tagVorlesenWert('Stimme'), tempo = tagVorlesenWert('Tempo') || '1';
   var opt = stimmen.length ? '<option value="">Automatisch (beste deutsche Stimme)</option>' + stimmen.map(function(v) { return '<option value="' + escH(v.name) + '"' + (v.name === cur ? ' selected' : '') + '>' + escH(v.name) + '</option>'; }).join('')
     : '<option value="">Keine Stimmen gefunden, Seite neu öffnen</option>';
-  return '<div class="lb-panel" style="padding:10px 12px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">Vorlesen: Stimme und Tempo</div>' +
+  return '<div class="section-header">Vorlesen (Mein Tag)</div><div class="card" style="margin-bottom:12px">' +
+    '<div style="font-size:13px;color:var(--text-light);margin-bottom:10px;line-height:1.5">Stimme und Tempo für den Knopf „Vorlesen“. Gilt nur für dieses Gerät. Es stehen nur Stimmen zur Wahl, die der Browser der App zeigt.</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
     '<select class="form-input" style="flex:2 1 220px" onchange="tagVorlesenSetzen(\'Stimme\', this.value)">' + opt + '</select>' +
     '<select class="form-input" style="flex:1 1 110px" onchange="tagVorlesenSetzen(\'Tempo\', this.value)">' +
@@ -6504,7 +6505,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-12e';
+var APP_STAND = '2026-11-12f';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
