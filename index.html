@@ -3054,7 +3054,7 @@ function vMeinTag() {
     '<div class="content lb">' + html + '<div style="padding-bottom:calc(24px + var(--safe-bottom))"></div></div>';
 }
 
-// Dokumente zu einem Thema (Feld dokumente: [{datei, anzeige, mailBetreff, mailText}], seit 12.11.2026). Die Dateien liegen
+// Dokumente zu einem Thema (Feld dokumente: [{datei, ansicht (PDF zum Ansehen, sonst datei), anzeige, mailBetreff, mailText}], seit 12.11.2026). Die Dateien liegen
 // auf dem Server (Ordner dokumente). „Öffnen“ holt sie mit dem Geräteschlüssel, „Per Mail“ legt einen Entwurf mit Anhang
 // im Brandschutz-Gmail an (gesendet wird dort von Hand). Zum Abschalten false.
 var TAG_DOKUMENTE = true;
@@ -3087,14 +3087,14 @@ function tagDokument(mail, tid, idx, k) {
     return;
   }
   // PDF in neuem Tab (Fenster vor dem Laden öffnen, sonst blockiert iOS es), andere Dateien als Download
-  var pdf = /\.pdf$/i.test(d.datei), w = pdf ? window.open('', '_blank') : null;
-  fetch(basis + '/api/datei?name=' + encodeURIComponent(d.datei), { headers: { 'Authorization': 'Bearer ' + S.srvKey } }).then(function(r) {
+  var zeig = d.ansicht || d.datei, pdf = /\.pdf$/i.test(zeig), w = pdf ? window.open('', '_blank') : null;
+  fetch(basis + '/api/datei?name=' + encodeURIComponent(zeig), { headers: { 'Authorization': 'Bearer ' + S.srvKey } }).then(function(r) {
     if (!r.ok) throw new Error('Server antwortet ' + r.status);
     return r.blob();
   }).then(function(b) {
     var u = URL.createObjectURL(b);
     if (w) w.location.href = u;
-    else { var l = document.createElement('a'); l.href = u; if (!pdf) l.download = d.datei; else l.target = '_blank'; document.body.appendChild(l); l.click(); l.remove(); }
+    else { var l = document.createElement('a'); l.href = u; if (!pdf) l.download = zeig; else l.target = '_blank'; document.body.appendChild(l); l.click(); l.remove(); }
     setTimeout(function() { URL.revokeObjectURL(u); }, 120000);
   }).catch(function(e) { if (w) w.close(); alert('Datei nicht geöffnet: ' + (e && e.message ? e.message : e)); });
 }
@@ -6461,7 +6461,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-12b';
+var APP_STAND = '2026-11-12c';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
