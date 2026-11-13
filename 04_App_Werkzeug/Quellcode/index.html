@@ -4821,6 +4821,8 @@ function setFotoStockwerk(iid, idx, val) {
 
 /* ── AUTO-BACKUP BEGEHUNGEN ── */
 function backupBegehungen() {
+  // Seit 13.11.2026 aus: der Server sichert selbst (Einstellungen → Server-Sicherung), Handy-Download war doppelt
+  return;
   try {
     var data = {
       version: 1,
@@ -6505,7 +6507,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-12g';
+var APP_STAND = '2026-11-13a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
