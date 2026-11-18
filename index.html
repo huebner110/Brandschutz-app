@@ -1779,6 +1779,11 @@ function vInspection() {
             '<span class="mangel-preview-text">' + (mangel.beschreibung || 'Mangel – tippen zum Bearbeiten') + '</span>' +
             seitBadge +
             '<span class="dring-badge dring-' + mangel.dringlichkeit + '">' + mangel.dringlichkeit + '</span></div>';
+          if (mangel.fotos && mangel.fotos.length) {
+            mangelPreview += '<div class="check-photos-row">';
+            for (var mf = 0; mf < mangel.fotos.length; mf++) mangelPreview += '<div class="check-photo-cell"><img class="check-photo-thumb" src="' + fotoSrc(mangel.fotos[mf]) + '" alt="Foto"></div>';
+            mangelPreview += '</div>';
+          }
         }
         var safeName = item.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
         var floorMode = check.stockwerkMode;
@@ -6523,7 +6528,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-18a';
+var APP_STAND = '2026-11-18b';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
