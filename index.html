@@ -246,6 +246,8 @@
     .lb-kpi.crit { --k: var(--crit); } .lb-kpi.warn { --k: var(--warn); } .lb-kpi.ok { --k: var(--ok); }
     .lb-panel { background: var(--card); border: 1px solid var(--border); border-top: 2px solid var(--primary); border-radius: 0; margin-bottom: 12px; }
     .lb-panel h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: var(--band); border-bottom: 1px solid var(--border); padding: 9px 12px; }
+    .tag-bereich { font-size: 15px; font-weight: 700; margin: 18px 4px 8px; color: var(--text); }
+    .tag-feierabend { border-top-color: var(--green, #2e7d32); }
     .lb-panel h2 small { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-light); }
     .lb-sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 10px; }
     .lb-site { background: var(--card); border: 1px solid var(--border); border-top: 4px solid var(--s, var(--border)); border-radius: 0; padding: 9px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -2940,12 +2942,23 @@ function vorschlagVerwerfen(vid) {
 var TAG_ARTEN = [
   // Besprechung mit Leitfaden (seit 12.11.2026): ein Punkt mit Themen zum Abhaken (Feld teile), wird vom Server angelegt
   { art: 'meeting', arten: ['meeting'], titel: 'Besprechung' },
-  { art: 'maengel', arten: ['maengel'], titel: 'Mängel heute (1 bis 3)' },
-  { art: 'anruf', arten: ['anruf'], titel: 'Anrufe' },
-  { art: 'freigabe', arten: ['freigabe'], titel: 'Freigeben (Entwürfe in Mail)' },
-  { art: 'diktat', arten: ['diktat', 'rueckfrage', 'hirschgarten'], titel: 'Zu klären' },
-  { art: 'termin', arten: ['termin'], titel: 'Fristen und Begehungen' }
+  // Drei Bereiche (seit 18.11.2026, Wunsch Thomas): Im Auto (nur Sprechen), Brandschutz (Büro Sendling), Hirschgarten (Technik)
+  { art: 'anruf', arten: ['anruf'], titel: 'Anrufe', bereich: 'auto' },
+  { art: 'diktat', arten: ['diktat'], titel: 'Zum Diktieren', bereich: 'auto' },
+  { art: 'maengel', arten: ['maengel'], titel: 'Mängel heute (1 bis 3)', bereich: 'brand' },
+  { art: 'freigabe', arten: ['freigabe'], titel: 'Freigeben (Entwürfe in Mail)', bereich: 'brand' },
+  { art: 'rueckfrage', arten: ['rueckfrage'], titel: 'Zu klären', bereich: 'brand' },
+  { art: 'termin', arten: ['termin'], titel: 'Fristen und Begehungen', bereich: 'brand' },
+  { art: 'hirschgarten', arten: ['hirschgarten'], titel: 'Technik Hirschgarten', bereich: 'hg' }
 ];
+var TAG_BEREICHE = { auto: '🚗 Im Auto: nur Anrufe und Diktate', brand: '🔥 Brandschutz (Büro Sendling)', hg: '🔧 Hirschgarten (Technik)' };
+// Arbeitszeit (Wunsch Thomas 18.11.2026): Mo bis Do, Arbeitsbeginn 8:15, Feierabend 17:00. Danach und Fr bis So Hinweis statt Druck.
+function tagFeierabendHtml() {
+  var d = new Date(), tag = d.getDay(), min = d.getHours() * 60 + d.getMinutes();
+  if (tag >= 1 && tag <= 4 && min >= 495 && min < 1020) return '';
+  var wann = tag >= 1 && tag <= 3 ? 'morgen um 8:15' : 'Montag um 8:15';
+  return '<div class="lb-panel tag-feierabend"><div style="padding:12px 14px;line-height:1.5"><b>Feierabend.</b> ' + (min < 495 && tag >= 1 && tag <= 4 ? 'Dein Arbeitstag beginnt um 8:15.' : 'Der Rest wartet bis ' + wann + '. Zeit für die Familie.') + '</div></div>';
+}
 // Begehung heute nicht geschafft: Knopf „Verschieben“ mit neuem Tag (nur Mo bis Do). Geht als Auftrag an den
 // Server, der den Kalendertermin verschiebt und den Punkt abhakt (seit 03.11.2026). Zum Abschalten false.
 var TAG_VERSCHIEBEN = true;
@@ -2980,9 +2993,11 @@ function vMeinTag() {
   var html = '';
   // Abgehaktes verschwindet aus der Liste (Wunsch Thomas), bleibt aber gespeichert und lässt sich einblenden
   var nErledigt = alle.filter(function(p) { return p.erledigt; }).length;
+  var letzterBereich = '';
   TAG_ARTEN.forEach(function(g) {
     var punkte = alle.filter(function(p) { return g.arten.indexOf(p.art) >= 0 && !p.erledigt; });
     if (!punkte.length) return;
+    if (g.bereich && g.bereich !== letzterBereich) { html += '<div class="tag-bereich">' + TAG_BEREICHE[g.bereich] + '</div>'; letzterBereich = g.bereich; }
     // Offenes zuerst, Erledigtes darunter
     punkte = punkte.filter(function(p) { return !p.erledigt; }).concat(punkte.filter(function(p) { return p.erledigt; }));
     var offen = g.ohneHaken ? 0 : punkte.filter(function(p) { return !p.erledigt; }).length;
@@ -3028,7 +3043,7 @@ function vMeinTag() {
           (TAG_VERSCHIEBEN && S.tagVerschiebenOffen === p.id ? tagVerschiebenForm(p) : '');
       }).join('') + '</ul></div>';
   });
-  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen werktags um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
+  if (!html) html = '<div class="lb-panel"><div class="lb-leer">' + (nErledigt ? 'Alles erledigt.' : 'Noch nichts da.') + ' Neue Punkte kommen Mo bis Do um 8:05, 12:25 und 15:40, Erledigtes wird zwischendurch abgehakt.</div></div>';
   html += tagStartHtml() + tagFristenHtml();
   // Wartet auf Antwort (seit 10.11.2026): offene Mail-Vorgänge der Nachfass-Liste, nur zum Ansehen. Antwort da zuerst, dann nach Frist.
   var warten = (S.vorgaenge || []).filter(function(v) { return v && v.id && !v.aktion && (v.art === 'offen' || v.art === 'antwort'); })
@@ -3051,6 +3066,7 @@ function vMeinTag() {
         '<span class="t"><b>' + escH(p.titel) + '</b><span class="auftrag">' + (uhr ? uhr + ' · ' : '') + escH(p.erledigtGrund || 'von dir abgehakt') + '</span></span></li>';
     }).join('') + '</ul></div>';
   if (TAG_ZETTEL_KNOPF) html = tagZettelKnopf() + html;
+  html = tagFeierabendHtml() + html;
   if (TAG_KALENDER) html = '<div class="tag-raster">' + tagKalender() + '<div>' + html + '</div></div>';
   return '<div class="header header-dark"><div class="header-center"><div class="header-title-sm">Mein Tag</div>' +
     '<div class="header-sub">' + sub + '</div></div>' +
@@ -6507,7 +6523,7 @@ function doExport() {
    GitHub Pages lässt die Geräte die Seite bis zu 10 Minuten aus dem Zwischenspeicher laden, die App vom
    Home-Bildschirm oft noch länger. Beim Start und beim Zurückkommen holt die App die Seite frisch; ist
    APP_STAND dort anders, lädt sie sich mit neuer Adresse neu. Beim Veröffentlichen APP_STAND ändern. */
-var APP_STAND = '2026-11-13a';
+var APP_STAND = '2026-11-18a';
 function appNeueFassungPruefen() {
   if (!window.fetch) return;
   fetch(location.pathname + '?stand=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.ok ? r.text() : ''; }).then(function(t) {
